@@ -1,0 +1,1555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Prizm.</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Prizm.">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#09090B">
+<link id="manifest-placeholder" rel="manifest">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Space+Grotesk:wght@500;600;700&family=Sora:wght@500;600;700;800&family=Poppins:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js" defer></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<link rel="stylesheet" href="./styles.css">
+
+<script>
+// PWA manifest for Android installability
+(function() {
+  const m = {
+    name: "Prizm",
+    short_name: "Prizm",
+    description: "Personal & family finance tracker",
+    id: "./",
+    scope: "./",
+    start_url: "./",
+    display: "standalone",
+    orientation: "portrait",
+    background_color: "#0a0b14",
+    theme_color: "#0a0b14",
+    icons: [
+      { src: "./icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+      { src: "./icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+      { src: "./icon-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" }
+    ]
+  };
+  try {
+    const blob = new Blob([JSON.stringify(m)], {type:'application/manifest+json'});
+    const el = document.getElementById('manifest-placeholder');
+    if (el) el.href = URL.createObjectURL(blob);
+  } catch(e) {}
+})();
+</script>
+
+<script>
+// Service worker: offline support + installability. Skipped on file:// since a
+// service worker requires an http(s) origin (GitHub Pages qualifies). Never
+// blocks first paint · registration runs after load. Data/auth requests are
+// bypassed inside sw.js, so caching can't serve stale ledger data.
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  var _hadController = !!navigator.serviceWorker.controller;
+  var _swReloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', function () {
+    if (_swReloaded || !_hadController) return; // don't reload on the very first install
+    _swReloaded = true;
+    window.location.reload(); // a new version just took over → show it immediately
+  });
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('./sw.js').catch(function (e) { console.warn('SW registration failed:', e); });
+  });
+}
+
+// ── Install to home screen ──
+// Android/Chrome fire 'beforeinstallprompt' · we stash it and replay it when the
+// user taps "Install Prizm". iOS has no such event, so we show manual steps.
+var _deferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); _deferredInstallPrompt = e; });
+function _isStandalone(){ return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true; }
+function _isIOSDevice(){ return /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); }
+async function installPrizm(){
+  if (_isStandalone()){ try { toast('✅ Prizm is already installed'); } catch(e){} return; }
+  if (_deferredInstallPrompt){
+    _deferredInstallPrompt.prompt();
+    try { await _deferredInstallPrompt.userChoice; } catch(e){}
+    _deferredInstallPrompt = null;
+    return;
+  }
+  var msg = _isIOSDevice()
+    ? 'To install Prizm on your iPhone or iPad:\n\n1.  Tap the Share button (the square with an up arrow) in Safari.\n2.  Scroll down and tap “Add to Home Screen”.\n3.  Tap “Add”.\n\nPrizm will then open like a normal app from your home screen.'
+    : 'To install Prizm:\n\nOpen your browser’s menu and choose “Install app” or “Add to Home screen”. If you don’t see the option, Prizm may already be installed.';
+  try { showCustomAlert('Install Prizm', msg); } catch(e){ alert(msg); }
+}
+window.addEventListener('load', function(){
+  var sub = document.getElementById('install-sub');
+  if (sub && _isStandalone()) sub.textContent = 'Installed ✓';
+  window.addEventListener('appinstalled', function(){ if (sub) sub.textContent = 'Installed ✓'; try { toast('✅ Prizm installed'); } catch(e){} });
+});
+</script>
+</head>
+<body>
+<!-- ── OPUS MARK · gold "L" with a spark (defined once, reused via <use>) ── -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="pz-gem-metal" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F3DEA0"/><stop offset=".5" stop-color="#C9A24A"/><stop offset="1" stop-color="#9C7A33"/>
+    </linearGradient>
+    <radialGradient id="pz-gem-glow" cx=".5" cy=".5" r=".5">
+      <stop offset="0" stop-color="#FFF6DC"/><stop offset="1" stop-color="#FFF6DC" stop-opacity="0"/>
+    </radialGradient>
+    <symbol id="pz-gem" viewBox="0 0 64 64">
+      <circle cx="27" cy="46" r="16" fill="url(#pz-gem-glow)" opacity=".45"/>
+      <path d="M24 13 V43 a5 5 0 0 0 5 5 H51" fill="none" stroke="url(#pz-gem-metal)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M24 40.4 q1.5 4.7 5.8 6 q-4.3 1.3 -5.8 6 q-1.5 -4.7 -5.8 -6 q4.3 -1.3 5.8 -6 z" fill="#FFFBEC"/>
+    </symbol>
+  </defs>
+</svg>
+
+<!-- ── Branded launch splash · shown on first paint, fades out once loaded ── -->
+<div id="splash" aria-hidden="true">
+  <div class="splash-word">PRIZM</div>
+  <div class="splash-load"><span></span></div>
+</div>
+<script>
+  // Hide the splash shortly after the app has loaded (independent of app.js).
+  window.addEventListener('load', function () {
+    setTimeout(function () {
+      var s = document.getElementById('splash');
+      if (s) { s.classList.add('hide'); setTimeout(function () { s.style.display = 'none'; }, 550); }
+    }, 1000);
+  });
+</script>
+
+<div id="loader"><div style="display:flex;flex-direction:column;align-items:center;gap:18px"><div style="font-family:'Poppins',sans-serif;font-weight:300;font-size:26px;letter-spacing:10px;color:#C6A15B;padding-left:10px;animation:pz-bob 3.5s ease-in-out infinite">PRIZM</div><div class="spin"></div></div></div>
+<div class="toast" id="toast"></div>
+
+<div class="custom-alert-overlay" id="custom-dialog-overlay">
+  <div class="custom-dialog">
+    <div class="dialog-title" id="dialog-title">Delete Entry</div>
+    <div class="dialog-body" id="dialog-body">Confirm deletion permanently?</div>
+    <div class="dialog-actions">
+      <button class="dialog-btn dialog-btn-cancel" id="dialog-cancel-btn" onclick="closeCustomDialog()">Cancel</button>
+      <button class="dialog-btn dialog-btn-danger" id="dialog-action-btn">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     ONBOARDING / SETUP FLOW
+═══════════════════════════════════════════ -->
+<div id="setup-screen">
+
+  <!-- 1. Welcome: Personal vs Family -->
+  <!-- STEP 1: Who · Solo vs Family -->
+  <div class="setup-page active" id="sp-welcome" style="justify-content:space-between;gap:24px">
+    <div style="display:flex;flex-direction:column;align-items:center;gap:18px;padding-top:8px">
+      <div style="width:64px;height:64px;border-radius:20px;background:var(--bg-3);border:1px solid var(--line-2);display:flex;align-items:center;justify-content:center;color:#C6A15B;box-shadow:0 10px 30px var(--shadow-2)"><img src="./logo-mark.png" width="30" height="30" alt="" aria-hidden="true" style="display:block;object-fit:contain"></div>
+      <div style="font-size:44px;font-weight:300;letter-spacing:15px;padding-left:15px;font-family:'Poppins',sans-serif;line-height:1;background:linear-gradient(92deg,#E7CD95,#CBA45C 55%,#95713B);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent">PRIZM</div>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:40px;width:100%">
+      <div style="text-align:center">
+        <h1 style="font-size:36px;font-weight:800;letter-spacing:-1.8px;line-height:1.12;font-family:var(--head-font);margin:0">Your money, <span class="wl-grad">in focus.</span></h1>
+        <div style="font-size:14px;color:var(--text-3);margin-top:16px;font-weight:500">Track, budget and share. Private by design.</div>
+      </div>
+      <div class="hero wl-card" aria-hidden="true" style="margin:0;padding:20px 24px;pointer-events:none">
+        <div class="hero-label">Balance</div>
+        <div class="hero-amount" style="font-size:30px;letter-spacing:-1px;margin-bottom:4px">$4,213.80</div>
+        <div class="hero-period" style="margin-bottom:16px">July 2026</div>
+        <div class="hero-row">
+          <div class="hero-stat" style="padding:8px 12px"><div class="hs-label"><span class="hs-dot" style="background:var(--hero-dot-inc, var(--green))"></span>Income</div><div class="hs-val" style="font-size:15px">$2,400</div></div>
+          <div class="hero-stat" style="padding:8px 12px"><div class="hs-label"><span class="hs-dot" style="background:var(--hero-dot-exp, var(--red))"></span>Spent</div><div class="hs-val" style="font-size:15px">$1,186</div></div>
+        </div>
+      </div>
+    </div>
+    <div style="width:100%;display:flex;flex-direction:column;align-items:center;gap:16px;padding-bottom:6px">
+      <button class="btn-primary" onclick="showSetup('sp-who')" style="font-size:16px;padding:16px;border-radius:999px">Start tracking</button>
+      <button class="btn-ghost" onclick="S.setupContext='family';S.family=true;showSetup('sp-family-join')" style="margin-top:0;border-radius:999px;padding:16px;font-size:15px;font-weight:600;color:var(--text-3);border:1.5px solid var(--line-2);background:var(--bg-3)">I have an invite code</button>
+      <div style="font-size:11px;color:var(--text-3);font-weight:600;letter-spacing:.4px" id="welcome-version"></div>
+    </div>
+  </div>
+
+  <!-- STEP 1: Account type (Personal vs Family) -->
+  <div class="setup-page" id="sp-who">
+    <div class="icon-btn setup-back" onclick="showSetup('sp-welcome')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg></div>
+    <div class="setup-title">How will you use Prizm?</div>
+    <div class="setup-sub" style="margin-bottom:20px">You can change this later.</div>
+    <div class="choice-card" onclick="chooseWho('solo')" style="margin-top:0">
+      <div class="choice-ico"><svg class="ic-line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="width:24px;height:24px"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+      <div class="choice-body"><div class="choice-title" style="font-size:17px">Personal Account</div><div class="choice-sub">Just for me.</div></div>
+    </div>
+    <div class="choice-card" onclick="chooseWho('family')" style="flex-direction:column;align-items:stretch;gap:12px">
+      <div style="display:flex;align-items:center;gap:16px">
+        <div class="choice-ico"><svg class="ic-line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="width:24px;height:24px"><path d="M17 21v-2a4 4 0 0 0-3-3.87"/><path d="M9 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M15.5 3.2a4 4 0 0 1 0 7.75"/></svg></div>
+        <div class="choice-body"><div class="choice-title" style="font-size:17px">Family Account</div><div class="choice-sub">Share budgets and track together.</div></div>
+      </div>
+      <div style="font-size:12px;color:var(--text-2);line-height:1.5;background:var(--bg-3);border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:flex;gap:8px;align-items:flex-start">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <span>You can choose which wallets are shared and which stay private later.</span>
+      </div>
+    </div>
+  </div>
+  <!-- STEP 3 (personal): storage & auth -->
+  <div class="setup-page" id="sp-solo-db">
+    <div class="icon-btn setup-back" onclick="showSetup('sp-who')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg></div>
+    <div class="setup-title">Where should it live?</div>
+    <div class="setup-sub" style="margin-bottom:18px">No Prizm servers · your data stays in your Google account or on this device.</div>
+    <div class="choice-card" onclick="openAutoSetup(false)">
+      <div class="choice-ico" style="background:#fff;border-color:#DADCE0"><svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg></div>
+      <div class="choice-body"><div class="choice-title">Sign in with Google<span style="font-size:9px;font-weight:800;letter-spacing:.5px;padding:3px 8px;border-radius:99px;background:var(--accent);color:var(--on-accent);margin-left:8px;vertical-align:middle">RECOMMENDED</span></div><div class="choice-sub">One tap · auto-creates a private Sheet in your Drive.</div></div>
+    </div>
+    <div class="choice-card" onclick="showSetup('sp-sheets-solo')">
+      <div class="choice-ico" style="background:#fff;border-color:#DADCE0"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path fill="#188038" d="M14.5 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V6.5L14.5 2z"/><path fill="#A8DAB5" d="M14.5 2v4.5H19L14.5 2z"/><path fill="#FFFFFF" d="M8.5 11h7v6.5h-7V11z"/></svg></div>
+      <div class="choice-body"><div class="choice-title">Use your own Google Sheet</div><div class="choice-sub">Advanced · copy the template, paste a link.</div></div>
+    </div>
+    <div style="text-align:center;margin-top:14px"><a onclick="quickStart()" style="font-size:13px;color:var(--text-3);cursor:pointer;text-decoration:underline;text-underline-offset:3px">Store on device only</a></div>
+  </div>
+  <!-- STEP 3 (family create): storage & auth -->
+  <div class="setup-page" id="sp-family-db">
+    <div class="icon-btn setup-back" onclick="showSetup('sp-family-create')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg></div>
+    <div class="setup-title">Where should your family live?</div>
+    <div class="setup-sub" style="margin-bottom:18px">One shared Sheet in your Drive. Only people with the invite link can use it.</div>
+    <div class="choice-card" onclick="openAutoSetup(true)">
+      <div class="choice-ico" style="background:#fff;border-color:#DADCE0"><svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg></div>
+      <div class="choice-body"><div class="choice-title">Sign in with Google<span style="font-size:9px;font-weight:800;letter-spacing:.5px;padding:3px 8px;border-radius:99px;background:var(--accent);color:var(--on-accent);margin-left:8px;vertical-align:middle">RECOMMENDED</span></div><div class="choice-sub">One tap · auto-creates the shared family Sheet.</div></div>
+    </div>
+    <div class="choice-card" onclick="showSetup('sp-sheets-family')">
+      <div class="choice-ico" style="background:#fff;border-color:#DADCE0"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path fill="#188038" d="M14.5 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V6.5L14.5 2z"/><path fill="#A8DAB5" d="M14.5 2v4.5H19L14.5 2z"/><path fill="#FFFFFF" d="M8.5 11h7v6.5h-7V11z"/></svg></div>
+      <div class="choice-body"><div class="choice-title">Use your own Google Sheet</div><div class="choice-sub">Advanced · copy the template, paste a link.</div></div>
+    </div>
+  </div>
+
+  <!-- STEP 2 (family): Join vs Create -->
+  <div class="setup-page" id="sp-family-branch">
+    <div class="icon-btn setup-back" onclick="showSetup('sp-who')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg></div>
+    <div class="setup-title">Your family</div>
+    <div class="setup-sub" style="margin-bottom:20px">Start a new family, or join one someone shared with you.</div>
+    <div class="choice-card" onclick="chooseFamilyMode('create')">
+      <div class="choice-ico"><svg class="ic-line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="width:24px;height:24px"><path d="M17 21v-2a4 4 0 0 0-3-3.87"/><path d="M9 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M15.5 3.2a4 4 0 0 1 0 7.75"/></svg></div>
+      <div class="choice-body"><div class="choice-title" style="font-size:16px">Create a new family</div><div class="choice-sub">You'll get a link to invite others.</div></div>
+    </div>
+    <div class="choice-card" onclick="chooseFamilyMode('join')">
+      <div class="choice-ico"><svg class="ic-line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="width:24px;height:24px"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg></div>
+      <div class="choice-body"><div class="choice-title" style="font-size:16px">Join an existing family</div><div class="choice-sub">Enter the invite link and password.</div></div>
+    </div>
+  </div>
+
+  <!-- STEP 2b (family): name your new family -->
+  <div class="setup-page" id="sp-family-create">
+    <div class="icon-btn setup-back" onclick="showSetup('sp-family-branch')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg></div>
+    <div class="setup-title">Name your family</div>
+    <div class="setup-sub" style="margin-bottom:20px">This is just a label · you can rename it anytime.</div>
+    <div class="setup-input-wrap">
+      <input class="finput" id="family-name" type="text" autocomplete="organization" placeholder="Family group name · e.g. The Patils" style="font-size:16px;margin-bottom:12px">
+      <button class="btn-primary" onclick="familyCreateContinue()">Continue &#8594;</button>
+    </div>
+  </div>
+  <!-- Guided automatic setup · one step per screen -->
+  <div class="setup-page" id="sp-auto-1">
+    <div class="icon-btn setup-back" onclick="showSetup(S.setupContext==='family'?'sp-family-db':'sp-solo-db')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg></div>
+    <div class="setup-sub" style="margin-bottom:4px;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--accent)">Step 1 of 3</div>
+    <div class="setup-title">Turn on Google's switch</div>
+    <div class="setup-sub" style="margin-bottom:16px">Google needs one switch turned ON before any app can build in your account. Ten seconds, once ever.</div>
+    <div class="setup-input-wrap">
+      <button class="btn-primary" onclick="wizOpenSwitch()">Open the switch page</button>
+      <button class="btn-ghost" onclick="wizSwitchDone()">The switch is ON &rarr; next step</button>
+    </div>
+    <div style="text-align:center;margin-top:24px"><a onclick="showSetup(S.setupContext==='family'?'sp-sheets-family':'sp-sheets-solo')" style="font-size:11px;color:var(--text-3);cursor:pointer;text-decoration:underline;text-underline-offset:3px">set up manually instead</a></div>
+  </div>
+
+  <div class="setup-page" id="sp-auto-2">
+    <div class="icon-btn setup-back" onclick="showSetup('sp-auto-1')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg></div>
+    <div class="setup-sub" style="margin-bottom:4px;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--accent)">Step 2 of 3</div>
+    <div class="setup-title">Sign in with Google</div>
+    <div class="setup-sub" style="margin-bottom:16px">Sign in and Prizm builds your private Sheet inside your own Drive. Nothing leaves your account.</div>
+    <div class="setup-input-wrap">
+      <button class="gsi-btn" onclick="autoSetupSheet(S.setupContext==='family')"><svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg><span>Sign in &amp; build my Sheet</span></button>
+    </div>
+  </div>
+
+  <div class="setup-page" id="sp-auto-3">
+    <div class="setup-sub" style="margin-bottom:4px;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--accent)">Step 3 of 3</div>
+    <div class="setup-title">One tap on the Google tab</div>
+    <div class="setup-input-wrap" style="margin-top:4px">
+      <div class="onb-card" style="margin-bottom:14px">
+        <div style="display:flex;gap:12px;padding:7px 0;align-items:flex-start"><div style="flex-shrink:0;width:22px;height:22px;border-radius:50%;background:var(--accent-soft);color:var(--accent);font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center">1</div><div style="font-size:13px;line-height:1.55;color:var(--text-2)">On the Google tab, <strong style="color:var(--text-1)">choose your account</strong>.</div></div>
+        <div style="display:flex;gap:12px;padding:7px 0;align-items:flex-start;border-top:1px solid var(--line)"><div style="flex-shrink:0;width:22px;height:22px;border-radius:50%;background:var(--accent-soft);color:var(--accent);font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center">2</div><div style="font-size:13px;line-height:1.55;color:var(--text-2)">If Google says the app <strong style="color:var(--text-1)">isn't verified</strong>: tap <strong style="color:var(--text-1)">Advanced &rarr; Go to Prizm Backend &rarr; Allow</strong>. That warning is normal for now.</div></div>
+        <div style="display:flex;gap:12px;padding:7px 0;align-items:flex-start;border-top:1px solid var(--line)"><div style="flex-shrink:0;width:22px;height:22px;border-radius:50%;background:var(--accent-soft);color:var(--accent);font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center">3</div><div style="font-size:13px;line-height:1.55;color:var(--text-2)">Come back here. The tab may fill with code &mdash; that's normal, just close it. <strong style="color:var(--text-1)">Prizm connects by itself.</strong></div></div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:center;gap:10px;padding:2px 0 12px">
+        <div id="wiz3-spinner" class="spinner" style="width:18px;height:18px;border:2.5px solid var(--line-2);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite;flex-shrink:0"></div>
+        <div id="wiz3-status" style="font-size:12px;color:var(--text-3);text-align:left">Watching for your OK&hellip;</div>
+      </div>
+      <button class="btn-primary" id="wiz3-open-btn" onclick="wizOpenEngine()">Open the Google tab</button>
+      <button class="btn-ghost" onclick="wizTryConnectNow()">I've allowed &rarr; connect now</button>
+    </div>
+  </div>
+
+  <!-- STEP 2 (alt): Solo Google Sheet setup -->
+  <div class="setup-page" id="sp-sheets-solo">
+    <div class="icon-btn setup-back" onclick="showSetup('sp-solo-db')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg></div>
+    <div class="su-wrap">
+      <div style="display:flex;flex-direction:column;align-items:center;width:100%">
+        <div class="setup-title" style="margin-bottom:16px">Connect your Sheet manually</div>
+        <a href="https://docs.google.com/spreadsheets/d/1Nsvka6hK-6Wgk4mG4MDVwXcHe5z8NiSJn4_nA0K8tew/copy" target="_blank" class="su-template-btn" style="width:100%"><span style="display:inline-flex;align-items:center;gap:8px;justify-content:center"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path fill="#188038" d="M14.5 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V6.5L14.5 2z"/><path fill="#A8DAB5" d="M14.5 2v4.5H19L14.5 2z"/><path fill="#FFFFFF" d="M8.5 11h7v6.5h-7V11zm1.1 1.1v1h2v-1h-2zm2.9 0v1h2v-1h-2zm-2.9 2v1h2v-1h-2zm2.9 0v1h2v-1h-2zm-2.9 2v1.2h2v-1.2h-2zm2.9 0v1.2h2v-1.2h-2z"/></svg><span>Copy the Sheet template</span></span></a>
+        <div class="su-steps-label">Then get your URL in 2 steps</div>
+        <div style="width:100%">
+          <div class="step-acc open"><div class="step-acc-head" onclick="this.parentElement.classList.toggle('open')"><span class="step-acc-num">1</span><span class="step-acc-title">Open Apps Script</span><svg class="step-acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 9l6 6 6-6"/></svg></div><div class="step-acc-body">In your new Sheet, go to <strong>Extensions → Apps Script</strong>.</div></div>
+          <div class="step-acc open"><div class="step-acc-head" onclick="this.parentElement.classList.toggle('open')"><span class="step-acc-num">2</span><span class="step-acc-title">Deploy as Web App</span><svg class="step-acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 9l6 6 6-6"/></svg></div><div class="step-acc-body">Click <strong>Deploy → New deployment → Web app</strong>, set access to <strong>Anyone</strong>, deploy and copy the URL.</div></div>
+        </div>
+        <div class="su-url-block" style="margin-top:20px">
+          <input class="finput" id="personal-url" type="url" inputmode="url" autocomplete="url" placeholder="https://script.google.com/macros/s/…/exec">
+          <button class="btn-primary" style="margin-top:12px" onclick="connectPersonal()">Connect →</button>
+          <button class="btn-ghost" style="border:none" onclick="quickStart()">Skip for now</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 2 (alt): Family Google Sheet setup -->
+  <div class="setup-page" id="sp-sheets-family">
+    <div class="icon-btn setup-back" onclick="showSetup('sp-family-db')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg></div>
+    <div class="su-wrap">
+      <div style="display:flex;flex-direction:column;align-items:center;width:100%">
+        <div class="setup-title" style="margin-bottom:16px">Create your family manually</div>
+        <a href="https://docs.google.com/spreadsheets/d/1Nsvka6hK-6Wgk4mG4MDVwXcHe5z8NiSJn4_nA0K8tew/copy" target="_blank" class="su-template-btn" style="width:100%"><span style="display:inline-flex;align-items:center;gap:8px;justify-content:center"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path fill="#188038" d="M14.5 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V6.5L14.5 2z"/><path fill="#A8DAB5" d="M14.5 2v4.5H19L14.5 2z"/><path fill="#FFFFFF" d="M8.5 11h7v6.5h-7V11zm1.1 1.1v1h2v-1h-2zm2.9 0v1h2v-1h-2zm-2.9 2v1h2v-1h-2zm2.9 0v1h2v-1h-2zm-2.9 2v1.2h2v-1.2h-2zm2.9 0v1.2h2v-1.2h-2z"/></svg><span>Copy the Sheet template</span></span></a>
+        <div class="su-steps-label">Get your URL in 2 steps</div>
+        <div style="width:100%">
+          <div class="step-acc open"><div class="step-acc-head" onclick="this.parentElement.classList.toggle('open')"><span class="step-acc-num">1</span><span class="step-acc-title">Open Apps Script</span><svg class="step-acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 9l6 6 6-6"/></svg></div><div class="step-acc-body">In your new Sheet, go to <strong>Extensions → Apps Script</strong>.</div></div>
+          <div class="step-acc open"><div class="step-acc-head" onclick="this.parentElement.classList.toggle('open')"><span class="step-acc-num">2</span><span class="step-acc-title">Deploy as Web App</span><svg class="step-acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 9l6 6 6-6"/></svg></div><div class="step-acc-body">Click <strong>Deploy → New deployment → Web app</strong>. Set access to <strong>Anyone</strong>, deploy and copy the URL.</div></div>
+        </div>
+        <div class="su-url-block" style="margin-top:20px">
+          <input class="finput" id="family-url" type="url" inputmode="url" autocomplete="url" placeholder="https://script.google.com/macros/s/…/exec" style="margin-bottom:8px">
+          
+          <button class="btn-primary" style="margin-top:12px" onclick="connectFamilyCreate()">Create Family →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. Family code result -->
+  <div class="setup-page" id="sp-family-code">
+    <div class="icon-btn setup-back" onclick="showSetup('sp-family-db')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg></div>
+    <div class="setup-title">Family created</div>
+    <div class="setup-sub">Share this code with your family to invite them.</div>
+    <div class="code-box">
+      <div class="code-label">Family Code</div>
+      <div class="code-val" id="family-code-val">—</div>
+      <button class="btn-ghost" style="margin-top:0" onclick="copyFamilyCode()">📋 Copy Code</button>
+    </div>
+    <div class="setup-input-wrap">
+      <div style="font-size:12px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--text-3);margin-bottom:8px;text-align:left">Family password</div>
+      <input class="finput" type="text" id="family-setup-pass" placeholder="Pick a password your family will share" autocomplete="off" style="margin-bottom:8px">
+      <div class="setup-sub" style="font-size:12px;margin-bottom:14px">Locks your ledger so only people with the code <em>and</em> this password can use it. Share both with your family.</div>
+      <button class="btn-primary" onclick="finishFamilySetup()">Continue</button>
+    </div>
+  </div>
+
+  <!-- 6. Family join -->
+  <div class="setup-page" id="sp-family-join">
+    <div class="icon-btn setup-back" onclick="showSetup('sp-family-branch')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg></div>
+    <div class="setup-title">Join a family</div>
+    <div class="setup-sub" style="margin-bottom:18px">Paste the invite link and password someone shared with you.</div>
+    <div class="setup-input-wrap">
+      <input class="finput" id="join-code" type="text" autocomplete="off" placeholder="Invite link or code" style="margin-bottom:12px;font-size:14px">
+      <input class="finput" id="join-password" type="password" autocomplete="off" placeholder="Family password" style="margin-bottom:12px;font-size:14px">
+      <button class="btn-primary" id="join-family-btn" onclick="connectFamilyJoin()">Join family</button>
+      <div id="join-skeleton" style="display:none;margin-top:18px">
+        <div class="skl" style="height:52px;border-radius:12px;margin-bottom:10px"></div>
+        <div class="skl" style="height:52px;border-radius:12px;margin-bottom:10px"></div>
+        <div class="skl" style="height:52px;border-radius:12px"></div>
+        <div style="text-align:center;font-size:13px;color:var(--text-3);margin-top:14px">Connecting to your family…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 7. Profile picker -->
+  <div class="setup-page" id="sp-profile-picker">
+    <div class="icon-btn setup-back" onclick="showSetup('sp-welcome')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg></div>
+    <div class="setup-title" id="profile-picker-title">Who's using Prizm?</div>
+    <div class="member-grid" id="profile-grid"></div>
+    <div class="setup-input-wrap">
+      <button class="btn-primary" onclick="showSetup('sp-new-member')">+ Add a family member</button>
+    </div>
+  </div>
+
+  <!-- 8. New member: name + pin -->
+  <div class="setup-page" id="sp-new-member">
+    <div class="icon-btn setup-back" id="new-member-back" onclick="showSetup('sp-profile-picker')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg></div>
+    <div class="setup-title">Add your profile</div>
+    <div class="setup-input-wrap" style="margin-top:0">
+      <input class="finput" id="new-member-name" type="text" placeholder="Your name" style="margin-bottom:12px;font-size:14px">
+      <div class="flbl" style="text-align:center;margin-bottom:8px">Choose a 4-digit PIN</div>
+      <div class="pin-dots" id="new-member-pin-dots">
+        <div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div>
+      </div>
+      <input class="finput" type="password" inputmode="numeric" autocomplete="off" maxlength="4" id="new-member-pin-kb" oninput="pinKbInput('new',this)" placeholder="Or type it" style="text-align:center;margin:0 auto 16px;max-width:200px;display:block">
+      <div class="pin-pad" style="margin:0 auto 16px">
+        <div class="pin-key" onclick="pinKey('1')">1</div><div class="pin-key" onclick="pinKey('2')">2</div><div class="pin-key" onclick="pinKey('3')">3</div>
+        <div class="pin-key" onclick="pinKey('4')">4</div><div class="pin-key" onclick="pinKey('5')">5</div><div class="pin-key" onclick="pinKey('6')">6</div>
+        <div class="pin-key" onclick="pinKey('7')">7</div><div class="pin-key" onclick="pinKey('8')">8</div><div class="pin-key" onclick="pinKey('9')">9</div>
+        <div class="pin-key fn" onclick="pinKey('clear')">Clear</div><div class="pin-key" onclick="pinKey('0')">0</div><div class="pin-key fn" onclick="pinKey('back')">⌫</div>
+      </div>
+      <button class="btn-primary" id="new-member-save" onclick="saveNewMember()" disabled>Save Profile</button>
+    </div>
+  </div>
+
+  <!-- 9. PIN entry to confirm identity -->
+  <div class="setup-page" id="sp-pin-entry">
+    <div class="icon-btn setup-back" onclick="showSetup('sp-profile-picker')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg></div>
+    <div class="member-avatar" id="pin-entry-avatar" style="width:64px;height:64px;font-size:24px;margin-bottom:16px">A</div>
+    <div class="setup-title" id="pin-entry-name">Enter PIN</div>
+    <div class="pin-dots" id="pin-entry-dots">
+      <div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div>
+    </div>
+    <input class="finput" type="password" inputmode="numeric" autocomplete="off" maxlength="4" id="pin-entry-kb" oninput="pinKbInput('entry',this)" placeholder="Or type it" style="text-align:center;margin:0 auto 16px;max-width:200px;display:block">
+    <div class="pin-pad">
+      <div class="pin-key" onclick="pinEntryKey('1')">1</div><div class="pin-key" onclick="pinEntryKey('2')">2</div><div class="pin-key" onclick="pinEntryKey('3')">3</div>
+      <div class="pin-key" onclick="pinEntryKey('4')">4</div><div class="pin-key" onclick="pinEntryKey('5')">5</div><div class="pin-key" onclick="pinEntryKey('6')">6</div>
+      <div class="pin-key" onclick="pinEntryKey('7')">7</div><div class="pin-key" onclick="pinEntryKey('8')">8</div><div class="pin-key" onclick="pinEntryKey('9')">9</div>
+      <div class="pin-key fn" onclick="pinEntryKey('clear')">Clear</div><div class="pin-key" onclick="pinEntryKey('0')">0</div><div class="pin-key fn" onclick="pinEntryKey('back')">⌫</div>
+    </div>
+  </div>
+
+  <!-- 11. One-time: set up accounts (skippable) -->
+  <!-- Name (its own step) -->
+  <!-- Quick preferences (track income + theme) -->
+  <div class="setup-page" id="sp-prefs" style="max-width:440px">
+    <div class="setup-kicker">Make it yours</div>
+    <div class="setup-title serif">Your ledger,<br>your rules.</div>
+    <div class="setup-sub" style="margin-bottom:18px">Twenty seconds now, perfectly yours forever. Change any of it later in Settings.</div>
+    <div class="setup-input-wrap" style="margin-top:0;gap:0">
+
+      <div class="onb-card">
+        <div class="onb-lbl">Your name</div>
+        <input class="finput" id="onboard-name" type="text" placeholder="First name is fine" autocomplete="given-name" style="font-size:16px;margin-bottom:14px">
+        <div class="onb-lbl">Your colour</div>
+        <div id="onb-color-row" style="display:flex;gap:10px;flex-wrap:wrap;padding:2px 0 4px">
+          <div class="color-dot" data-avc="#C6A15B" style="background:#C6A15B" onclick="setAvatarColor('#C6A15B')"></div>
+          <div class="color-dot" data-avc="#6C5CE7" style="background:#6C5CE7" onclick="setAvatarColor('#6C5CE7')"></div>
+          <div class="color-dot" data-avc="#3B82F6" style="background:#3B82F6" onclick="setAvatarColor('#3B82F6')"></div>
+          <div class="color-dot" data-avc="#10B981" style="background:#10B981" onclick="setAvatarColor('#10B981')"></div>
+          <div class="color-dot" data-avc="#EC4899" style="background:#EC4899" onclick="setAvatarColor('#EC4899')"></div>
+          <div class="color-dot" data-avc="#EF4444" style="background:#EF4444" onclick="setAvatarColor('#EF4444')"></div>
+        </div>
+      </div>
+
+      <div class="onb-card">
+        <div class="onb-row" onclick="onbToggleIncome(this)">
+          <div class="onb-row-txt"><div class="onb-row-t">Track income too</div><div class="onb-row-s">See what comes in, not just what goes out</div></div>
+          <div class="sw on" id="onb-sw-income"><span></span></div>
+        </div>
+        <div class="onb-row" onclick="onbToggleQuick(this)">
+          <div class="onb-row-txt"><div class="onb-row-t">Scribe by default</div><div class="onb-row-s">The + button opens instant text entry: "8.75 coffee at starbucks"</div></div>
+          <div class="sw on" id="onb-sw-quick"><span></span></div>
+        </div>
+        <div class="onb-row" onclick="onbToggleIcons(this)">
+          <div class="onb-row-txt"><div class="onb-row-t">Emoji category icons</div><div class="onb-row-s">Off = clean minimal line icons</div></div>
+          <div class="sw on" id="onb-sw-icons"><span></span></div>
+        </div>
+      </div>
+
+      <div class="onb-card">
+        <div class="onb-lbl">Theme</div>
+        <div id="onb-theme" style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px">
+        <div class="theme-card active" data-theme-mode="signature" onclick="applyTheme('signature',true)"><div class="theme-chip" style="background:linear-gradient(135deg,#E7CD95,#CBA45C 55%,#95713B)"></div><span>Signature</span></div>
+        <div class="theme-card" data-theme-mode="warm" onclick="applyTheme('warm',true)"><div class="theme-chip" style="background:linear-gradient(135deg,#F59E0B,#B45309)"></div><span>Warm</span></div>
+        <div class="theme-card" data-theme-mode="light" onclick="applyTheme('light',true)"><div class="theme-chip" style="background:linear-gradient(135deg,#FFFFFF,#E7E9F2);border:1px solid #C9CDDA"></div><span>Light</span></div>
+        <div class="theme-card" data-theme-mode="noir" onclick="applyTheme('noir',true)"><div class="theme-chip" style="background:linear-gradient(135deg,#000,#15151A);border:1px solid #333"></div><span>Noir</span></div>
+        </div>
+      </div>
+
+      <div class="onb-card" style="padding:0;overflow:hidden">
+        <div class="onb-row" style="padding:14px 16px" onclick="installPrizm()">
+          <div class="onb-row-txt"><div class="onb-row-t">Install on your home screen</div><div class="onb-row-s">Opens instantly, works offline</div></div>
+          <div style="color:var(--accent);font-weight:700;font-size:13px;flex-shrink:0">Install</div>
+        </div>
+      </div>
+
+      <button class="btn-primary" onclick="showSetup('sp-accounts')" style="margin-top:6px">Continue &#8594;</button>
+      <div style="text-align:center;margin-top:14px"><a onclick="showSetup('sp-accounts')" style="font-size:12px;color:var(--text-3);cursor:pointer;text-decoration:underline;text-underline-offset:3px">Skip for now</a></div>
+    </div>
+  </div>
+
+  <div class="setup-page" id="sp-accounts">
+    <div class="icon-btn setup-back" onclick="showSetup('sp-prefs')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg></div>
+    <div class="setup-title">Add an account (optional)</div>
+    <div class="setup-sub" style="margin-bottom:8px">Only if you want to track balances. Skip this and add accounts anytime in Settings · nothing here is required.</div>
+    <div class="setup-input-wrap" style="margin-top:0">
+      <div id="onboard-accts-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:4px"></div>
+      <div class="fg" style="margin-top:16px">
+        <div class="flbl">Account name</div>
+        <input class="finput" id="onboard-acct-name" type="text" placeholder="e.g. Everyday Account">
+      </div>
+      <div class="fg">
+        <div class="flbl">Type</div>
+        <select class="finput" id="onboard-acct-type">
+          <option value="Checking">🏦 Everyday / Checking</option>
+          <option value="Savings">💰 Savings</option>
+          <option value="Credit">💳 Credit card</option>
+          <option value="Cash">💵 Cash</option>
+          <option value="Investment">📈 Investment</option>
+        </select>
+      </div>
+      <div class="fg">
+        <div class="flbl">Starting balance (optional)</div>
+        <input class="finput" id="onboard-acct-bal" type="number" inputmode="decimal" placeholder="0.00">
+      </div>
+      <button class="btn-ghost" style="margin-top:0;margin-bottom:16px;background:var(--bg-3)" onclick="addOnboardAccount()">+ Add another account</button>
+      <button class="btn-primary" onclick="finishOnboarding()">Save &amp; finish</button>
+      <button class="btn-ghost" style="background:var(--bg-3);border:1px solid var(--line-2)" onclick="finishOnboarding(true)">Skip · I'll add accounts later</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════
+     MAIN APP SHELL
+═══════════════════════════════════════════ -->
+<div id="shell" style="display:none">
+
+<div class="page active" id="page-home" style="position:relative">
+  <div class="topbar" style="height:calc(64px + var(--safe-t));align-items:flex-end;padding-bottom:8px">
+    <div style="display:flex;align-items:center;gap:12px;min-width:0">
+      <div style="display:flex;flex-direction:column;gap:1px;min-width:0">
+        <div style="font-size:12px;font-weight:500;color:var(--text-3)" id="home-greeting-label">Good morning,</div>
+        <div style="font-size:20px;font-weight:800;letter-spacing:-0.7px;color:var(--text-1);line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" id="home-greeting-name">there</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <div id="streak-badge" title="Tracking streak" style="display:none;align-items:center;gap:4px;font-size:12px;font-weight:800;color:var(--accent);background:var(--accent-soft);border-radius:999px;padding:6px 10px">&#128293;<span id="streak-badge-n"></span></div>
+      <div class="icon-btn" onclick="syncDataWithLoader()" title="Sync">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"/><path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14"/></svg>
+      </div>
+      <div class="brand-btn" onclick="goTab('home')" title="Home" aria-label="Home"><img src="./logo-mark.png" width="22" height="22" alt="" aria-hidden="true" style="display:block;object-fit:contain"></div>
+    </div>
+  </div>
+  <div class="hero" id="home-hero">
+    <div class="hero-label">Balance</div>
+    <div class="hero-amount" id="hero-balance">$0.00</div>
+    <div class="hero-period" id="hero-period">This month</div>
+    <div class="hero-row">
+      <div class="hero-stat" id="hero-income-stat">
+        <div class="hs-label"><span class="hs-dot" style="background:var(--hero-dot-inc, var(--green))"></span>Income</div>
+        <div class="hs-val" id="hero-income">$0</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hs-label"><span class="hs-dot" style="background:var(--hero-dot-exp, var(--red))"></span>Spent</div>
+        <div class="hs-val" id="hero-spent">$0</div>
+      </div>
+    </div>
+  </div>
+  <!-- Simple mode exit banner (toggled by applySimpleMode) -->
+  <div id="simple-exit-banner" style="display:none;align-items:center;justify-content:space-between;gap:8px;margin:8px 16px 0;padding:8px 8px 8px 16px;border-radius:999px;background:var(--accent-soft);border:1px solid color-mix(in srgb, var(--accent) 28%, transparent);font-size:12px;font-weight:600;color:var(--accent)">
+    <span style="display:inline-flex;align-items:center;gap:8px"><span style="font-size:13px">&#9889;</span>Simple mode</span>
+    <button class="btn-ghost" style="width:auto;min-height:0;margin:0;padding:8px 16px;font-size:12px;border-radius:999px;border:none;background:var(--bg-2);color:var(--text-2)" onclick="setSimpleMode(false)">Turn off</button>
+  </div>
+  <!-- Simple mode home -->
+  <div id="simple-home" style="display:none;flex-direction:column;padding:16px 16px 8px;gap:16px">
+    <div class="hero" style="margin:0;padding:16px 16px 16px">
+      <div class="hero-label" id="simple-month-lbl">This month</div>
+      <div class="hero-amount" id="simple-spent-amt" style="margin-bottom:4px;font-size:30px;letter-spacing:-1px">$0</div>
+      <div class="hero-period" id="simple-spent-lbl" style="margin-bottom:12px">Nothing spent yet</div>
+      <div class="hero-row">
+        <div class="hero-stat" style="padding:8px 12px"><div class="hs-label">Today</div><div class="hs-val" id="simple-today-amt">$0</div></div>
+        <div class="hero-stat" style="padding:8px 12px"><div class="hs-label">This week</div><div class="hs-val" id="simple-week-amt">$0</div></div>
+      </div>
+    </div>
+    <button class="btn-primary" onclick="openAddModal()" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:11px 26px;font-size:14px;border-radius:999px;width:auto;margin:0 auto;box-shadow:0 4px 14px color-mix(in srgb, var(--accent) 22%, transparent)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      <span>Add expense</span>
+    </button>
+    <div>
+      <div style="display:flex;align-items:baseline;justify-content:space-between;padding:2px 2px 8px">
+        <div class="settings-label" style="padding:0">Recent</div>
+        <div style="font-size:11px;color:var(--text-3)" id="simple-recent-count"></div>
+      </div>
+      <div id="simple-recent-txs" class="tx-list" style="padding:0"></div>
+    </div>
+  </div>
+  <!-- Full mode home -->
+  <div id="full-home">
+  <!-- Upcoming bills (next 14 days) · filled by renderUpcoming(), hidden when empty -->
+  <div id="home-wrap" style="display:none"></div>
+  <div id="home-streak" style="display:none"></div>
+  <div id="home-upcoming" style="display:none"></div>
+  <div id="budget-snapshot"></div>
+  <!-- Savings goals · filled by renderGoals() -->
+  <div id="home-goals" style="display:none"></div>
+  <div class="sh" id="acct-sh"><h2>Accounts</h2><span class="sh-action" onclick="openAcctModal()">Add account</span></div>
+  <div class="chips" id="chips-row"><div style="color:var(--text-3);font-size:13px;padding:4px 2px">No accounts yet</div></div>
+  <div class="sh" id="recent-sh" style="margin-top:6px"><h2>Recent activity</h2><span class="sh-action" onclick="goTab('transactions')">View all</span></div>
+  <div class="tx-list" id="home-txs">
+    <div class="empty"><div class="empty-icon">○</div><div class="empty-title">No transactions</div><div class="empty-sub">Tap + to record your first one.</div></div>
+  </div>
+  
+  </div>
+  <div class="page-bot"></div>
+</div>
+
+<div class="page" id="page-transactions" style="position:relative">
+  <div class="topbar">
+    <div style="display:flex;align-items:center;gap:8px;min-width:0">
+      
+      <div class="tb-left">
+        <div class="topbar-title">Activity</div>
+        <div class="tb-sub" id="tx-count">0 items</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px"><div class="tb-sub" id="tx-topbar-period" style="text-align:right"></div><div class="brand-btn" onclick="goTab('home')" title="Home" aria-label="Home"><img src="./logo-mark.png" width="22" height="22" alt="" aria-hidden="true" style="display:block;object-fit:contain"></div></div>
+  </div>
+  <div class="search-wrap" style="margin-top:4px">
+    <div class="search-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></div>
+    <input class="search-in" id="search-in" placeholder="Search transactions…" oninput="renderAllTxDebounced()">
+  </div>
+  <div class="member-chip-row" id="member-chip-row" style="display:none"></div>
+  <!-- Category filter chips are built dynamically from the live category list
+       (renderFilterChips) so custom & renamed categories always appear. -->
+  <div class="filter-row" id="tx-filter-row"></div>
+  <div class="filter-row" id="tx-subfilter-row" style="display:none;margin-top:2px"></div>
+  <div class="tx-list" id="all-txs">
+    <div class="empty"><div class="empty-icon">○</div><div class="empty-title">No transactions</div><div class="empty-sub">Add one using the + button.</div></div>
+  </div>
+  <div class="page-bot"></div>
+</div>
+
+<div class="page" id="page-analytics" style="position:relative">
+  <div class="topbar">
+    <div style="display:flex;align-items:center;gap:8px;min-width:0">
+      
+      <div class="tb-left">
+        <div class="topbar-title">Analytics</div>
+        <div class="tb-sub" id="an-topbar-sub"></div>
+      </div>
+    </div>
+    <div class="brand-btn" onclick="goTab('home')" title="Home" aria-label="Home"><img src="./logo-mark.png" width="22" height="22" alt="" aria-hidden="true" style="display:block;object-fit:contain"></div>
+  </div>
+
+  <!-- Period pills -->
+  <div class="period-row" style="margin-top:4px">
+    <div class="pb active" onclick="setPeriod('week',this)">7 days</div>
+    <div class="pb" onclick="setPeriod('month',this)">Month</div>
+    <div class="pb" onclick="setPeriod('3m',this)">3 months</div>
+    <div class="pb" onclick="setPeriod('year',this)">Year</div>
+    <div class="pb" onclick="setPeriod('all',this)">All time</div>
+    <div class="pb" id="pb-custom" onclick="openPeriodPicker()">More…</div>
+  </div>
+
+  <!-- Analytics tab nav -->
+  <div class="an-tabs">
+    <div class="an-tab active" onclick="setAnalyticsTab('overview',this)">Overview</div>
+    <div class="an-tab" onclick="setAnalyticsTab('breakdown',this)">Spending</div>
+    <div class="an-tab" onclick="setAnalyticsTab('trends',this)">Trends</div>
+  </div>
+
+  <!-- ── OVERVIEW TAB ── -->
+  <div class="an-panel" id="an-overview">
+    <!-- Smart insights -->
+    <div class="chart-box" id="insights-box" style="display:none">
+      <div class="cb-title">Insights</div>
+      <div class="cb-sub" id="insights-sub">Based on your activity</div>
+      <div id="insights-rows"></div>
+    </div>
+    <!-- 4 stat cards -->
+    <div class="stats-grid4">
+      <div class="stat-box">
+        <div class="sb-label">Spent</div>
+        <div class="sb-val" id="a-spent">$0</div>
+        <div class="sb-sub" id="a-txcount">0 transactions</div>
+      </div>
+      <div class="stat-box">
+        <div class="sb-label">Income</div>
+        <div class="sb-val" id="a-income">$0</div>
+        <div class="sb-sub" id="a-net">Net $0</div>
+      </div>
+      <div class="stat-box">
+        <div class="sb-label">Saved</div>
+        <div class="sb-val" id="a-save-rate">0%</div>
+        <div class="sb-sub">of income</div>
+      </div>
+      <div class="stat-box">
+        <div class="sb-label">Daily avg</div>
+        <div class="sb-val" id="a-daily-avg">$0</div>
+        <div class="sb-sub">spending</div>
+      </div>
+    </div>
+    <!-- Donut -->
+    <div class="chart-box">
+      <div class="cb-title" id="donut-chart-title">Income vs expenses</div>
+      <div class="cb-sub" id="a-period-lbl">Last 7 days</div>
+      <div style="display:flex;flex-direction:column;gap:16px">
+        <div style="display:flex;justify-content:center"><canvas id="donut-chart" style="max-width:200px;max-height:200px"></canvas></div>
+        <div id="donut-legend" style="display:flex;flex-direction:column;gap:6px"></div>
+      </div>
+    </div>
+    <!-- Top categories -->
+    <div class="chart-box">
+      <div class="cb-title">Top categories</div>
+      <div class="cb-sub">Where your money goes</div>
+      <div id="cat-bars"><div class="no-data">No data yet</div></div>
+    </div>
+    <!-- Budget progress -->
+    <div class="chart-box" id="budget-progress-box" style="display:none">
+      <div class="cb-title">Budgets</div>
+      <div class="cb-sub">This month vs limits</div>
+      <div id="budget-progress"></div>
+    </div>
+    <!-- Monthly spending trend -->
+    <div class="chart-box">
+      <div class="cb-title">Monthly spending</div>
+      <div class="cb-sub">Last 6 months</div>
+      <div style="height:160px;position:relative"><canvas id="monthly-trend-chart"></canvas></div>
+    </div>
+    <!-- Spending by day of week -->
+    <div class="chart-box">
+      <div class="cb-title">Spending by day of week</div>
+      <div class="cb-sub">Average per weekday · all time</div>
+      <div style="height:140px;position:relative"><canvas id="dow-chart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- ── TRENDS TAB ── -->
+  <!-- ── BREAKDOWN TAB ── -->
+  <div class="an-panel" id="an-trends" style="display:none">
+    <div class="chart-box">
+      <div class="cb-title" id="trends-inc-title">Income vs expenses</div>
+      <div class="cb-sub" id="a-trend-lbl">Over time</div>
+      <div class="chart-h" style="height:200px"><canvas id="line-chart"></canvas></div>
+    </div>
+    <div class="chart-box">
+      <div class="cb-title">Daily spending</div>
+      <div class="cb-sub">Expenses per day</div>
+      <div class="chart-h"><canvas id="bar-chart"></canvas></div>
+    </div>
+    <!-- Trend stat cards -->
+    <div class="chart-box">
+      <div class="cb-title">Period comparison</div>
+      <div class="cb-sub">vs previous period</div>
+      <div id="trend-compare"></div>
+    </div>
+  </div>
+
+  <div class="an-panel" id="an-breakdown" style="display:none">
+      <div class="an-sub-tabs">
+      <div class="an-sub-tab active" onclick="setBreakdownView('category',this)">Category</div>
+      <div class="an-sub-tab" onclick="setBreakdownView('account',this)">Account</div>
+      <div class="an-sub-tab" onclick="setBreakdownView('income',this)">Income</div>
+      <div class="an-sub-tab an-sub-tab-person" onclick="setBreakdownView('person',this)" style="display:none">Person</div>
+    </div>
+    <div class="stats-grid" id="bd-stats"></div>
+    <div class="chart-box" id="bd-cat-panel">
+      <div class="cb-title">By category</div>
+      <div class="cb-sub">All spending categories</div>
+      <div id="bd-cat-bars"><div class="no-data">No data yet</div></div>
+    </div>
+    <div class="chart-box" id="bd-acct-panel" style="display:none">
+      <div class="cb-title">By account</div>
+      <div class="cb-sub">Spending per account</div>
+      <div id="bd-acct-bars"><div class="no-data">No transactions yet</div></div>
+    </div>
+    <div class="chart-box" id="bd-inc-panel" style="display:none">
+      <div class="cb-title">Income sources</div>
+      <div class="cb-sub">Where money comes in</div>
+      <div id="bd-inc-bars"><div class="no-data">No income recorded yet</div></div>
+    </div>
+    <div class="chart-box" id="bd-person-panel" style="display:none">
+      <div class="cb-title">By family member</div>
+      <div class="cb-sub">Who's spending what</div>
+      <div id="member-bars"><div class="no-data">No data yet</div></div>
+    </div>
+    <div class="chart-box" id="bd-pie-panel">
+      <div class="cb-title">Category breakdown</div>
+      <div class="cb-sub">Share of spending</div>
+      <div style="display:flex;justify-content:center;margin-bottom:16px"><canvas id="cat-pie-chart" style="max-width:200px;max-height:200px"></canvas></div>
+      <div id="cat-pie-legend" style="display:flex;flex-direction:column;gap:6px"></div>
+    </div>
+  </div>
+
+  <div class="page-bot"></div>
+</div>
+
+
+<!-- ── CSV IMPORT OVERLAY ── -->
+<div id="csv-import-overlay" style="display:none;position:fixed;inset:0;z-index:300;background:rgba(0,0,0,0.7);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);align-items:flex-end;justify-content:center">
+  <div style="background:var(--bg-2);border-radius:var(--r-xl) var(--r-xl) 0 0;width:100%;max-width:480px;max-height:85vh;overflow-y:auto;padding:24px 20px 40px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <div style="font-size:17px;font-weight:700">Import CSV</div>
+      <button onclick="closeImportCSV()" style="background:var(--bg-4);border:none;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text-2)">&#10005;</button>
+    </div>
+    <div id="csv-step-1">
+      <div style="border:2px dashed var(--line-3);border-radius:var(--r-lg);padding:32px 20px;text-align:center;margin-bottom:16px;cursor:pointer" onclick="document.getElementById('csv-file-input').click()">
+        <div style="font-size:32px;margin-bottom:8px">&#128194;</div>
+        <div style="font-size:15px;font-weight:600;margin-bottom:4px">Choose a bank file</div>
+        <div style="font-size:13px;color:var(--text-3)">CSV, OFX/QFX or QIF · most bank exports</div>
+      </div>
+      <input type="file" id="csv-file-input" accept=".csv,.ofx,.qfx,.qif,text/csv,application/x-ofx" style="display:none" onchange="handleCSVFile(this)">
+    </div>
+    <div id="csv-step-2" style="display:none">
+      <div style="font-size:13px;font-weight:600;color:var(--text-2);margin-bottom:8px">Map columns</div>
+      <div id="csv-column-mapping" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px"></div>
+      <div style="font-size:13px;font-weight:600;color:var(--text-2);margin-bottom:8px">Preview</div>
+      <div id="csv-preview" style="font-size:12px;overflow-x:auto;margin-bottom:16px"></div>
+      <div id="csv-acct-row" style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+        <div style="width:110px;font-size:13px;font-weight:500;flex-shrink:0">Account</div>
+        <select id="csv-acct-select" style="flex:1;background:var(--bg-3);border:1px solid var(--line-2);border-radius:var(--r-sm);padding:8px 8px;color:var(--text-1);font-size:13px"></select>
+      </div>
+      <div id="csv-dateformat-row" style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+        <div style="width:110px;font-size:13px;font-weight:500;flex-shrink:0">Date format</div>
+        <select id="csv-dateformat-select" style="flex:1;background:var(--bg-3);border:1px solid var(--line-2);border-radius:var(--r-sm);padding:8px 8px;color:var(--text-1);font-size:13px">
+          <option value="auto">Auto-detect</option>
+          <option value="dmy">Day / Month / Year (AU, UK, EU)</option>
+          <option value="mdy">Month / Day / Year (US)</option>
+          <option value="ymd">Year-Month-Day (ISO)</option>
+        </select>
+      </div>
+      <div id="csv-member-row" style="display:none;align-items:center;gap:8px;margin-bottom:12px">
+        <div style="width:110px;font-size:13px;font-weight:500;flex-shrink:0">Assign to</div>
+        <select id="csv-member-select" style="flex:1;background:var(--bg-3);border:1px solid var(--line-2);border-radius:var(--r-sm);padding:8px 8px;color:var(--text-1);font-size:13px"></select>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button onclick="csvBack()" style="flex:1;padding:12px;background:var(--bg-3);border:1px solid var(--line-2);border-radius:var(--r-md);color:var(--text-1);font-size:14px;cursor:pointer;touch-action:manipulation">Back</button>
+        <button onclick="doImportCSV()" style="flex:2;padding:12px;background:var(--accent);border:none;border-radius:var(--r-md);color:var(--on-accent);font-size:14px;font-weight:600;cursor:pointer;touch-action:manipulation">Import</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="page" id="page-settings" style="position:relative">
+  <div class="topbar">
+    <div style="display:flex;align-items:center;gap:8px;min-width:0">
+      
+      <div class="tb-left">
+        <div class="topbar-title">Settings</div>
+        <div class="tb-sub" id="settings-topbar-sub"></div>
+      </div>
+    </div>
+    <div class="brand-btn" onclick="goTab('home')" title="Home" aria-label="Home"><img src="./logo-mark.png" width="22" height="22" alt="" aria-hidden="true" style="display:block;object-fit:contain"></div>
+  </div>
+  <div class="profile-card" onclick="openPersonalize()" style="cursor:pointer" title="Personalize your profile">
+    <div class="avatar" id="profile-av">P</div>
+    <div style="flex:1;min-width:0">
+      <div class="profile-name" id="profile-name">Prizm User</div>
+      <div class="profile-sub" id="profile-sub">Local engine active</div>
+    </div>
+    <div class="sh-action" id="switch-profile-btn" style="display:none;flex-shrink:0" onclick="event.stopPropagation();switchProfile()">Switch</div>
+    <div style="flex-shrink:0;font-size:11px;font-weight:600;color:var(--text-3)">Personalise</div>
+    <div class="srow-arrow" style="flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div>
+  </div>
+  <div id="admin-note" style="display:none;margin:0 16px 4px;font-size:12px;color:var(--text-3);padding:2px 2px">🔒 Some settings are managed by your family admin.</div>
+
+  <!-- Look & Feel + profile editing live on the dedicated Personalize page (tap the profile card) -->
+
+  <div class="settings-section full-only">
+    <div class="settings-label">Subcategories</div>
+    <div class="settings-group">
+      <div class="srow" onclick="openSubcatManager()" style="background:linear-gradient(160deg,color-mix(in srgb,var(--accent) 10%,var(--bg-3)),var(--bg-2));border:1px solid var(--accent-soft);border-radius:var(--r-lg)">
+        <div class="srow-ico" style="background:var(--accent-soft);border-color:var(--accent)"><span class="i-e">&#127991;&#65039;</span><span class="i-l"><svg class="ic-line" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 13.42 20.6a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></span></div>
+        <div class="srow-body"><div class="srow-title" style="font-size:15px">Subcategories</div><div class="srow-sub">Add detail under any category, like Transport ▸ Petrol. They appear when you pick that category.</div></div>
+        <div class="srow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="settings-section">
+    <div class="settings-label">Account</div>
+    <div class="settings-group">
+      <div class="srow full-only admin-only" style="cursor:default">
+        <div class="srow-body"><div class="srow-title">Hero card period</div><div class="srow-sub">Totals shown on the hero card</div></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end" id="hero-period-setting">
+          <button class="fc" data-hp="week" onclick="setHeroPeriod('week')" style="font-size:12px;padding:6px 8px">Week</button>
+          <button class="fc active" data-hp="month" onclick="setHeroPeriod('month')" style="font-size:12px;padding:6px 8px">Month</button>
+          <button class="fc" data-hp="year" onclick="setHeroPeriod('year')" style="font-size:12px;padding:6px 8px">Year</button>
+          <button class="fc" data-hp="all" onclick="setHeroPeriod('all')" style="font-size:12px;padding:6px 8px">All</button>
+        </div>
+      </div>
+      <div class="srow" onclick="editCurrency()">
+        <div class="srow-ico"><span class="i-e">&#128178;</span><span class="i-l"><svg class="ic-line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/></svg></span></div>
+        <div class="srow-body"><div class="srow-title">Currency</div><div class="srow-sub" id="pref-currency">AUD (A$)</div></div>
+        <div class="srow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div>
+      </div>
+      <div class="srow" onclick="toggleDuePrompt()">
+        <div class="srow-ico"><span class="i-e">&#128276;</span><span class="i-l"><svg class="ic-line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></span></div>
+        <div class="srow-body"><div class="srow-title">Due-bill check-in</div><div class="srow-sub" id="due-prompt-sub">On · asks about due bills when you open Prizm</div></div>
+        <div class="srow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div>
+      </div>
+      <div class="srow admin-only" onclick="setTrackIncome(!S.trackIncome)">
+        <div class="srow-ico"><span class="i-e">&#128184;</span><span class="i-l"><svg class="ic-line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg></span></div>
+        <div class="srow-body"><div class="srow-title">Track income</div><div class="srow-sub" id="track-income-sub">On</div></div>
+        <div class="srow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div>
+      </div>
+      <div class="srow" onclick="setSimpleMode(!S.simpleMode)">
+        <div class="srow-ico"><span class="i-e">&#9889;</span><span class="i-l"><svg class="ic-line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span></div>
+        <div class="srow-body"><div class="srow-title">Simple mode</div><div class="srow-sub" id="simple-mode-sub">Off</div></div>
+        <div class="srow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="settings-section full-only" id="family-section" style="display:none">
+    <div class="settings-label">Family</div>
+    <div class="settings-group" style="margin-bottom:8px">
+      <div class="srow admin-only" onclick="copyFamilyCode()">
+        <div class="srow-ico"><span class="i-e">&#128273;</span><span class="i-l"><svg class="ic-line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg></span></div>
+        <div class="srow-body"><div class="srow-title">Family code</div><div class="srow-sub" id="family-code-sub">Tap to copy &amp; share</div></div>
+        <div class="srow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div>
+      </div>
+    </div>
+    <div class="settings-group" style="margin-bottom:16px">
+      <div class="srow" onclick="cyclePinMode()">
+        <div class="srow-ico"><span class="i-e">&#128273;</span><span class="i-l"><svg class="ic-line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg></span></div>
+        <div class="srow-body"><div class="srow-title">Ask for PIN</div><div class="srow-sub" id="pin-mode-sub">Only when switching profiles</div></div>
+        <div class="srow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div>
+      </div>
+    </div>
+    <div class="settings-label">Members</div>
+    <div id="member-list"></div>
+    <button class="btn-ghost admin-only" onclick="openMemberModal()">Add family member</button>
+  </div>
+
+  <!-- ── MANAGE · accounts, budgets & recurring in ONE section (no sub-dividers) ── -->
+  <div class="settings-section full-only">
+    <div class="settings-label">Manage</div>
+    <div class="settings-group" id="acct-settings-list">
+      <div class="srow" onclick="openAcctModal()"><div class="srow-ico"><span class="i-e">&#127974;</span><span class="i-l"><svg class="ic-line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/></svg></span></div><div class="srow-body"><div class="srow-title" style="font-size:13px">Add your first account</div></div><div class="srow-arrow" style="font-size:18px;font-weight:600;color:var(--accent)">+</div></div>
+    </div>
+    <button class="btn-ghost" id="acct-add-btn" onclick="openAcctModal()" style="margin-top:8px">Add account</button>
+    <div id="budget-list" style="margin:16px 0 8px">
+      <div class="settings-group"><div class="srow" onclick="openBudgetModal()"><div class="srow-ico"><span class="i-e">&#127919;</span><span class="i-l"><svg class="ic-line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg></span></div><div class="srow-body"><div class="srow-title" style="font-size:13px">Set a monthly budget</div></div><div class="srow-arrow" style="font-size:18px;font-weight:600;color:var(--accent)">+</div></div></div>
+    </div>
+    <button class="btn-ghost admin-only" id="budget-add-btn" onclick="openBudgetModal()" style="margin-top:8px">Add budget</button>
+    <div id="income-list" style="margin:16px 0 8px">
+      <div class="settings-group"><div class="srow" onclick="openRecurringModal()"><div class="srow-ico"><span class="i-e">&#128257;</span><span class="i-l"><svg class="ic-line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></span></div><div class="srow-body"><div class="srow-title" style="font-size:13px">Add a recurring bill or income</div></div><div class="srow-arrow" style="font-size:18px;font-weight:600;color:var(--accent)">+</div></div></div>
+    </div>
+    <button class="btn-ghost" id="rec-add-btn" onclick="openRecurringModal()" style="margin-top:8px">Add recurring</button>
+  </div>
+
+  <!-- ── CATEGORIES (collapsible, in place) ── -->
+  <div class="settings-section full-only" style="padding:0;overflow:hidden">
+    <button onclick="toggleAdvanced()" id="adv-toggle-btn" style="display:flex;align-items:center;justify-content:space-between;width:100%;padding:16px 16px;background:none;border:none;cursor:pointer;font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:1.3px;font-family:var(--font);text-align:left">
+      <span>Categories</span>
+      <svg id="adv-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
+    </button>
+    <div id="advanced-panel" style="display:none;padding:0 16px 16px">
+      <div class="settings-label" style="padding-top:4px">Expense Categories</div>
+      <div id="adv-exp-cats" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px"></div>
+      <div class="cat-add-row">
+        <input class="finput cat-name-in" type="text" id="new-exp-name" placeholder="New expense category" autocomplete="off">
+        <input class="finput cat-emoji-in" type="text" id="new-exp-emoji" maxlength="2" placeholder="icon" autocomplete="off" title="Optional icon">
+      </div>
+      <button class="btn-ghost cat-add-btn" onclick="addCat('exp')">Add category</button>
+      <div style="height:1px;background:var(--line);margin:16px 0 16px"></div>
+      <div class="settings-label">Income Categories</div>
+      <div id="adv-inc-cats" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px"></div>
+      <div class="cat-add-row">
+        <input class="finput cat-name-in" type="text" id="new-inc-name" placeholder="New income category" autocomplete="off">
+        <input class="finput cat-emoji-in" type="text" id="new-inc-emoji" maxlength="2" placeholder="icon" autocomplete="off" title="Optional icon">
+      </div>
+      <button class="btn-ghost cat-add-btn" onclick="addCat('inc')">Add category</button>
+    </div>
+  </div>
+
+  <!-- ── DATA & SYNC · everything data-related in ONE card ── -->
+  <div class="settings-section full-only">
+    <div class="settings-label">Data &amp; Sync</div>
+    <div class="settings-group">
+      <div class="srow" onclick="syncDataWithLoader()">
+        <div class="srow-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"/><path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14"/></svg></div>
+        <div class="srow-body"><div class="srow-title">Sync now</div><div class="srow-sub" id="last-sync-lbl">Refresh from cloud</div></div>
+        <div class="srow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div>
+      </div>
+      <div class="srow" onclick="recalcBalances()">
+        <div class="srow-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><path d="M3 3v5h5"/><path d="M3 8a9 9 0 1 0 2.5-5"/><path d="M12 7v5l3 2"/></svg></div>
+        <div class="srow-body"><div class="srow-title">Recalculate balances</div><div class="srow-sub">Rebuild account balances from your transactions · fixes any drift</div></div>
+        <div class="srow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div>
+      </div>
+      <div class="srow full-only" onclick="toggleMonthlyReport()">
+        <div class="srow-ico"><span class="i-e">&#128232;</span><span class="i-l"><svg class="ic-line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg></span></div>
+        <div class="srow-body"><div class="srow-title">Monthly email report</div><div class="srow-sub" id="monthly-report-sub">Off · a month-in-review email from your own account</div></div>
+        <div class="srow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div>
+      </div>
+      <div class="srow" onclick="reconnect()">
+        <div class="srow-ico"><span class="i-e">&#128279;</span><span class="i-l"><svg class="ic-line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span></div>
+        <div class="srow-body"><div class="srow-title" id="data-mode-title">Storage</div><div class="srow-sub" id="data-mode-sub">Where your data lives</div></div>
+        <div class="srow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div>
+      </div>
+      <div class="srow admin-only" onclick="setPrizmPassword()">
+        <div class="srow-ico"><span class="i-e">&#128274;</span><span class="i-l"><svg class="ic-line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span></div>
+        <div class="srow-body"><div class="srow-title">Password lock</div><div class="srow-sub" id="password-sub">Off · optional extra lock</div></div>
+        <div class="srow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div>
+      </div>
+      <div class="srow" onclick="openOverlay('backup-options-overlay')">
+        <div class="srow-ico"><span class="i-e">&#128190;</span><span class="i-l"><svg class="ic-line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg></span></div>
+        <div class="srow-body"><div class="srow-title">Backup &amp; restore</div><div class="srow-sub">Save everything to a file, or bring it all back</div></div>
+        <div class="srow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div>
+      </div>
+      <div class="srow" onclick="openOverlay('csv-options-overlay')">
+        <div class="srow-ico"><span class="i-e">&#128202;</span><span class="i-l"><svg class="ic-line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/></svg></span></div>
+        <div class="srow-body"><div class="srow-title">Import &amp; export</div><div class="srow-sub">Bank files in, spreadsheets out</div></div>
+        <div class="srow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div>
+      </div>
+      <input type="file" id="restore-file-input" accept="application/json,.json" style="display:none" onchange="importBackup(this)">
+      <div class="srow" onclick="deleteAndResetSheet()">
+        <div class="srow-ico" style="background:color-mix(in srgb, var(--red) 14%, transparent)">&#128465;&#65039;</div>
+        <div class="srow-body"><div class="srow-title" style="color:var(--red)">Reset this device</div><div class="srow-sub">Signs out and wipes Prizm here · your Sheet and its data survive</div></div>
+        <div class="srow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── BETA · experimental features behind sliding toggles (all OFF by default) ── -->
+  <div class="settings-section" id="beta-section">
+    <div class="settings-label">Beta</div>
+    <div class="settings-group">
+      <div class="srow" onclick="toggleBetaMode()">
+        <div class="srow-ico"><span class="i-e">&#129514;</span><span class="i-l"><svg class="ic-line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6"/><path d="M10 3v6.5L5.2 18a1.5 1.5 0 0 0 1.3 2.2h11a1.5 1.5 0 0 0 1.3-2.2L14 9.5V3"/><path d="M7.5 14h9"/></svg></span></div>
+        <div class="srow-body"><div class="srow-title">Beta mode</div><div class="srow-sub" id="beta-mode-sub">Off &middot; experimental features</div></div>
+        <div class="sw" id="beta-sw-main"><span></span></div>
+      </div>
+    </div>
+    <div class="settings-group" id="beta-features" style="margin-top:8px;display:none">
+      <div class="srow" onclick="toggleBetaFeature('scribe')">
+        <div class="srow-ico"><span class="i-e">&#9998;</span><span class="i-l"><svg class="ic-line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></span></div>
+        <div class="srow-body"><div class="srow-title">Scribe</div><div class="srow-sub">Type entries in plain text &mdash; &ldquo;8.75 coffee at Starbucks&rdquo;</div></div>
+        <div class="sw" id="beta-sw-scribe"><span></span></div>
+      </div>
+      <div class="srow" onclick="toggleBetaFeature('email')">
+        <div class="srow-ico"><span class="i-e">&#9993;&#65039;</span><span class="i-l"><svg class="ic-line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg></span></div>
+        <div class="srow-body"><div class="srow-title">Email</div><div class="srow-sub">Email yourself receipts and summaries from your own account</div></div>
+        <div class="sw" id="beta-sw-email"><span></span></div>
+      </div>
+      <div class="srow" onclick="toggleBetaFeature('monthlyEmail')">
+        <div class="srow-ico"><span class="i-e">&#128231;</span><span class="i-l"><svg class="ic-line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/><path d="M12 11v5"/><path d="m9.5 13.5 2.5 2.5 2.5-2.5"/></svg></span></div>
+        <div class="srow-body"><div class="srow-title">Monthly email</div><div class="srow-sub">A month-in-review email on the 1st of each month</div></div>
+        <div class="sw" id="beta-sw-monthlyEmail"><span></span></div>
+      </div>
+      <div class="srow" onclick="toggleBetaFeature('aiBoost')">
+        <div class="srow-ico"><span class="i-e">&#10038;</span><span class="i-l"><svg class="ic-line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3.5"/></svg></span></div>
+        <div class="srow-body"><div class="srow-title">AI Boost</div><div class="srow-sub">Smarter Quick add that reads messy text into clean entries</div></div>
+        <div class="sw" id="beta-sw-aiBoost"><span></span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── OPUS · install + website ── -->
+  <div class="settings-section">
+    <div class="settings-label">Prizm</div>
+    <div class="settings-group">
+      <div class="srow" onclick="installPrizm()">
+        <div class="srow-ico"><span class="i-e">&#128241;</span><span class="i-l"><svg class="ic-line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span></div>
+        <div class="srow-body"><div class="srow-title">Install Prizm</div><div class="srow-sub" id="install-sub">Add to your home screen</div></div>
+        <div class="srow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div>
+      </div>
+      <div class="srow" onclick="openPrizmWebsite()">
+        <div class="srow-ico"><span class="i-e">&#127760;</span><span class="i-l"><svg class="ic-line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></span></div>
+        <div class="srow-body"><div class="srow-title">Visit the website</div><div class="srow-sub">Learn what Prizm does and why tracking works</div></div>
+        <div class="srow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7"/><path d="M7 7h10v10"/></svg></div>
+      </div>
+      <div class="srow" onclick="openChangelog()">
+        <div class="srow-ico"><span class="i-e">&#10024;</span><span class="i-l"><svg class="ic-line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3z"/></svg></span></div>
+        <div class="srow-body"><div class="srow-title">What's new</div><div class="srow-sub">Everything added in recent updates</div></div>
+        <div class="srow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div>
+      </div>
+      <div class="srow" onclick="openHelp()">
+        <div class="srow-ico"><span class="i-e">&#10067;</span><span class="i-l"><svg class="ic-line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span></div>
+        <div class="srow-body"><div class="srow-title">Help &amp; guide</div><div class="srow-sub">Short answers to the big questions</div></div>
+        <div class="srow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div>
+      </div>
+      <div class="srow" onclick="setupAIBoost()">
+        <div class="srow-ico"><span class="i-e">&#10038;</span><span class="i-l"><svg class="ic-line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3.5"/></svg></span></div>
+        <div class="srow-body"><div class="srow-title">AI Boost</div><div class="srow-sub" id="ai-boost-sub">Off · smarter Quick add, one tap</div></div>
+        <div class="srow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── LEGAL · at the very bottom -->
+  <div class="settings-section full-only">
+    <div class="settings-label">Legal</div>
+    <div class="settings-group">
+      <div class="srow" style="cursor:default;flex-direction:column;align-items:flex-start;gap:6px;padding:16px">
+        <div style="font-size:13px;font-weight:600;color:var(--text-2)">Disclaimers</div>
+        <div style="font-size:12px;color:var(--text-3);line-height:1.6">
+          Prizm is a personal finance tracker, not a financial adviser. Everything you see here is calculated from the entries you make, so treat it as a helpful picture rather than an official record. For decisions about investing, tax, credit or the law, check your bank statements and talk to a qualified professional.
+        </div>
+        <div style="font-size:12px;color:var(--text-3);line-height:1.6;margin-top:8px">
+          Your data lives on this device and, if you connect sync, in your own Google Sheet. Prizm runs no servers and never sees your numbers. Keep your family code and password safe, since anyone holding both can open the shared ledger.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:6px 0 8px">
+    <span style="color:#C6A15B;opacity:.85"><img src="./logo-mark.png" width="22" height="22" alt="" aria-hidden="true" style="display:block;object-fit:contain"></span>
+    <div style="text-align:center;color:var(--text-3);font-size:11px;font-weight:600;letter-spacing:.4px" id="app-version"></div>
+  </div>
+  <div class="page-bot"></div>
+</div>
+
+
+<!-- ═══ PERSONALIZE PAGE (opened from the profile card) ═══ -->
+<div id="personalize-page">
+  <div class="topbar" style="position:sticky;top:0;left:auto;right:auto;height:auto;padding:calc(var(--safe-t) + 8px) 16px 8px;z-index:5">
+    <div style="display:flex;align-items:center;gap:12px;min-width:0">
+      <div class="icon-btn" onclick="closePersonalize()" title="Back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg></div>
+      <div class="tb-left">
+        <div class="topbar-title">Personalize</div>
+        <div class="tb-sub">Profile &amp; appearance</div>
+      </div>
+    </div>
+  </div>
+  <div style="padding:16px 0 28px">
+
+    <!-- Avatar editor -->
+    <div class="settings-section">
+      <div class="settings-group" style="padding:24px 16px;display:flex;flex-direction:column;align-items:center;gap:16px">
+        <div class="avatar" id="pp-avatar" style="width:88px;height:88px;font-size:32px;border-radius:50%">P</div>
+        <div style="display:flex;gap:8px">
+          <button class="btn-ghost" style="margin:0;padding:8px 16px;font-size:13px" onclick="document.getElementById('pp-photo-input').click()">Upload photo</button>
+          <button class="btn-ghost" id="pp-remove-photo" style="margin:0;padding:8px 16px;font-size:13px;display:none;color:var(--red)" onclick="removeAvatarPhoto()">Remove</button>
+        </div>
+        <input type="file" id="pp-photo-input" accept="image/*" style="display:none" onchange="pickAvatarPhoto(this)">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center" id="pp-color-row">
+          <div class="color-dot" data-avc="#6C5CE7" style="background:#6C5CE7" onclick="setAvatarColor('#6C5CE7')"></div>
+          <div class="color-dot" data-avc="#3B82F6" style="background:#3B82F6" onclick="setAvatarColor('#3B82F6')"></div>
+          <div class="color-dot" data-avc="#22D3EE" style="background:#22D3EE" onclick="setAvatarColor('#22D3EE')"></div>
+          <div class="color-dot" data-avc="#10B981" style="background:#10B981" onclick="setAvatarColor('#10B981')"></div>
+          <div class="color-dot" data-avc="#F59E0B" style="background:#F59E0B" onclick="setAvatarColor('#F59E0B')"></div>
+          <div class="color-dot" data-avc="#EC4899" style="background:#EC4899" onclick="setAvatarColor('#EC4899')"></div>
+          <div class="color-dot" data-avc="#EF4444" style="background:#EF4444" onclick="setAvatarColor('#EF4444')"></div>
+          <div class="color-dot" data-avc="#64748B" style="background:#64748B" onclick="setAvatarColor('#64748B')"></div>
+        </div>
+        <div style="font-size:11px;color:var(--text-3);text-align:center">Photo and color stay on this device.</div>
+      </div>
+    </div>
+
+    <!-- Profile -->
+    <div class="settings-section">
+      <div class="settings-label">Profile</div>
+      <div class="settings-group">
+        <div class="srow" onclick="editName()">
+          <div class="srow-ico"><span class="i-e">&#128100;</span><span class="i-l"><svg class="ic-line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span></div>
+          <div class="srow-body"><div class="srow-title">Name</div><div class="srow-sub" id="pref-name">Prizm User</div></div>
+          <div class="srow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Look & Feel (moved from Settings) -->
+    <div class="settings-section">
+      <div class="settings-label">Adding transactions</div>
+      <div class="settings-group" style="margin-bottom:16px">
+        <div class="srow" style="cursor:default;flex-direction:column;align-items:stretch;gap:10px;padding:16px">
+          <div style="font-size:13px;font-weight:600;color:var(--text-1)">What the + button opens</div>
+          <div style="display:flex;gap:8px" id="add-mode-selector">
+            <button class="fc" data-add-mode="quick" onclick="setAddMode('quick',true)" style="flex:1;padding:12px;font-size:13px">&#10002; Scribe<br><span style="font-size:10px;font-weight:500;color:var(--text-3)">type it in one line</span></button>
+            <button class="fc" data-add-mode="form" onclick="setAddMode('form',true)" style="flex:1;padding:12px;font-size:13px">Classic form<br><span style="font-size:10px;font-weight:500;color:var(--text-3)">fields and buttons</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="settings-label">Look &amp; Feel</div>
+      <div class="settings-group">
+        <div class="srow" style="cursor:default;flex-direction:column;align-items:stretch;gap:12px;padding:16px">
+          <div style="font-size:13px;font-weight:600;color:var(--text-1)">Accent</div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap" id="accent-selector">
+            <div id="accent-active-dot" class="color-dot active" style="background:var(--accent)" title="Current"></div>
+            <div id="accent-default-chip" class="fc" onclick="useThemeAccent()" style="font-size:12px;padding:4px 8px;min-height:30px;border-radius:99px">Theme default</div>
+            <div id="accent-more-btn" onclick="toggleAccentExtras()" style="width:30px;height:30px;border-radius:50%;background:var(--bg-4);border:1.5px solid var(--line-2);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;color:var(--text-2);flex-shrink:0;font-weight:600;touch-action:manipulation">···</div>
+            <div id="accent-extras" style="display:none">
+              <div class="color-dot" data-accent="#6C5CE7" style="background:#6C5CE7" onclick="setAccent('#6C5CE7',true,true)"></div>
+              <div class="color-dot" data-accent="#6366F1" style="background:#6366F1" onclick="setAccent('#6366F1',true,true)"></div>
+              <div class="color-dot" data-accent="#3B82F6" style="background:#3B82F6" onclick="setAccent('#3B82F6',true,true)"></div>
+              <div class="color-dot" data-accent="#22D3EE" style="background:#22D3EE" onclick="setAccent('#22D3EE',true,true)"></div>
+              <div class="color-dot" data-accent="#10B981" style="background:#10B981" onclick="setAccent('#10B981',true,true)"></div>
+              <div class="color-dot" data-accent="#EC4899" style="background:#EC4899" onclick="setAccent('#EC4899',true,true)"></div>
+              <div class="color-dot" data-accent="#F59E0B" style="background:#F59E0B" onclick="setAccent('#F59E0B',true,true)"></div>
+              <div class="color-dot" data-accent="#EF4444" style="background:#EF4444" onclick="setAccent('#EF4444',true,true)"></div>
+            </div>
+          </div>
+        </div>
+        <div class="srow" onclick="toggleAccentHero()">
+          <div class="srow-ico"><span class="i-e">&#127752;</span><span class="i-l"><svg class="ic-line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/></svg></span></div>
+          <div class="srow-body"><div class="srow-title">Accent colours the hero card</div><div class="srow-sub" id="accent-hero-sub">Off</div></div>
+          <div class="srow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div>
+        </div>
+        <div class="srow" style="cursor:default;flex-direction:column;align-items:stretch;gap:8px;padding:16px">
+          <div style="font-size:13px;font-weight:600;color:var(--text-1)">Theme</div>
+          <div id="theme-selector" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
+            <div class="theme-card" data-theme-mode="signature" onclick="applyTheme('signature',true)"><div class="theme-chip" style="background:linear-gradient(135deg,#E7CD95,#CBA45C 55%,#95713B)"></div><span>Signature</span></div>
+            <div class="theme-card" data-theme-mode="warm" onclick="applyTheme('warm',true)"><div class="theme-chip" style="background:linear-gradient(135deg,#F59E0B,#B45309)"></div><span>Warm</span></div>
+            <div class="theme-card" data-theme-mode="light" onclick="applyTheme('light',true)"><div class="theme-chip" style="background:linear-gradient(135deg,#FFFFFF,#E7E9F2);border:1px solid #C9CDDA"></div><span>Light</span></div>
+            <div class="theme-card" data-theme-mode="noir" onclick="applyTheme('noir',true)"><div class="theme-chip" style="background:linear-gradient(135deg,#000,#15151A);border:1px solid #333"></div><span>Noir</span></div>
+          </div>
+        </div>
+        <div class="srow" style="cursor:default;flex-direction:column;align-items:stretch;gap:8px;padding:16px">
+          <div style="font-size:13px;font-weight:600;color:var(--text-1)">Hero gradient</div>
+          <div style="font-size:11px;color:var(--text-3);margin-top:-4px">Compare the balance-card look</div>
+          <div id="herostyle-selector" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+            <div class="hero-opt active" data-herostyle-mode="original" onclick="applyHeroStyle('original',true)"><div class="hero-swatch" style="background:linear-gradient(135deg,#8B5CF6,#6C5CE7 45%,#3B82F6 78%,#22D3EE)"></div><span>Original</span></div>
+            <div class="hero-opt" data-herostyle-mode="refined" onclick="applyHeroStyle('refined',true)"><div class="hero-swatch" style="background:linear-gradient(155deg,#211E45,#2B2760 48%,#383184)"></div><span>Refined</span></div>
+            <div class="hero-opt" data-herostyle-mode="offpurple" onclick="applyHeroStyle('offpurple',true)"><div class="hero-swatch" style="background:linear-gradient(155deg,#06423A,#0A5A4E 46%,#107A69)"></div><span>Off-purple</span></div>
+          </div>
+        </div>
+        <div class="srow full-only" style="cursor:default">
+          <div class="srow-body"><div class="srow-title">Corners</div></div>
+          <div style="display:flex;gap:6px">
+            <button class="fc corner-opt" data-corner="sharp" onclick="setCorner('sharp',this)" style="padding:6px 8px;font-size:12px;border-radius:4px;touch-action:manipulation">Sharp</button>
+            <button class="fc corner-opt active" data-corner="round" onclick="setCorner('round',this)" style="padding:6px 8px;font-size:12px;border-radius:10px;touch-action:manipulation">Round</button>
+            <button class="fc corner-opt" data-corner="pill" onclick="setCorner('pill',this)" style="padding:6px 8px;font-size:12px;border-radius:20px;touch-action:manipulation">Pill</button>
+          </div>
+        </div>
+        <div class="srow full-only" style="cursor:default;flex-direction:column;align-items:stretch;gap:8px;padding:16px">
+          <div style="font-size:13px;font-weight:600;color:var(--text-1)">Category icons</div>
+          <div style="font-size:11px;color:var(--text-3);margin-top:-4px">How category icons look across the app</div>
+          <div id="iconmode-selector" style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px">
+            <div class="icon-opt active" data-iconmode-opt="emoji" onclick="applyIconMode('emoji',true)"><div class="icon-prev">&#127828;</div><span>Emoji</span></div>
+            <div class="icon-opt" data-iconmode-opt="minimal" onclick="applyIconMode('minimal',true)"><div class="icon-prev"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="var(--accent)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></div><span>Minimal</span></div>
+          </div>
+        </div>
+        <div class="srow full-only" onclick="toggleCompact()">
+          <div class="srow-ico"><span class="i-e">&#128209;</span><span class="i-l"><svg class="ic-line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></span></div>
+          <div class="srow-body"><div class="srow-title">Compact mode</div><div class="srow-sub" id="compact-mode-sub">Off</div></div>
+          <div class="srow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<nav id="nav">
+  <div class="nb active" id="nb-home" onclick="goTab('home')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+    <span class="nb-lbl">Home</span>
+  </div>
+  <div class="nb" id="nb-transactions" onclick="goTab('transactions')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+    <span class="nb-lbl">Activity</span>
+  </div>
+  <div class="fab" onclick="openAddModal()" role="button" aria-label="Add transaction" title="Add transaction">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+  </div>
+  <div class="nb" id="nb-analytics" onclick="goTab('analytics')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+    <span class="nb-lbl">Analytics</span>
+  </div>
+  <div class="nb" id="nb-settings" onclick="goTab('settings')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06.06a2 2 0 0 1 2.83 2.83l-.06-.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    <span class="nb-lbl">Settings</span>
+  </div>
+</nav>
+
+</div>
+
+<!-- ═══════════════════════════════════════════
+     MODALS
+═══════════════════════════════════════════ -->
+
+<!-- Historical period picker -->
+<div class="overlay" id="goal-overlay" onclick="closeBg(event,'goal-overlay')">
+  <div class="sheet">
+    <div class="handle"></div>
+    <div class="modal-title" id="goal-modal-title">New goal</div>
+    <div class="fg"><div class="flbl">Name</div><input class="finput" id="goal-name" placeholder="e.g. Emergency fund"></div>
+    <div class="fg"><div class="flbl">Target amount</div><input class="finput" id="goal-target" type="number" inputmode="decimal" placeholder="1000"></div>
+    <div class="fg"><div class="flbl">Saved so far</div><input class="finput" id="goal-saved" type="number" inputmode="decimal" placeholder="0"></div>
+    <div class="fg"><div class="flbl">Icon</div><input class="finput" id="goal-emoji" maxlength="2" placeholder="🎯" style="width:90px"></div>
+    <button class="btn-primary" onclick="submitGoal()">Save goal</button>
+    <button class="btn-ghost" id="goal-delete-btn" style="display:none;color:var(--red)" onclick="deleteGoal()">Delete goal</button>
+    <button class="btn-ghost" onclick="closeOverlay('goal-overlay')">Cancel</button>
+  </div>
+</div>
+<div class="overlay" id="goal-add-overlay" onclick="closeBg(event,'goal-add-overlay')">
+  <div class="sheet">
+    <div class="handle"></div>
+    <div class="modal-title" id="goal-add-title">Add to goal</div>
+    <div class="fg"><div class="flbl">Amount to add</div><input class="finput" id="goal-add-amt" type="number" inputmode="decimal" placeholder="50"></div>
+    <button class="btn-primary" onclick="commitGoalAdd()">Add to savings</button>
+    <button class="btn-ghost" onclick="closeOverlay('goal-add-overlay')">Cancel</button>
+  </div>
+</div>
+<div class="overlay" id="quick-overlay" onclick="closeBg(event,'quick-overlay')">
+  <div class="sheet">
+    <div class="handle"></div>
+    <div class="modal-title" style="display:flex;align-items:center;justify-content:center;gap:8px"><span style="font-size:16px">&#10002;</span>Scribe</div>
+    <div style="font-size:12px;color:var(--text-3);text-align:center;margin-bottom:12px">Write it like you'd say it. One transaction per line.</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-bottom:12px">
+      <div class="fc" style="font-size:11px;padding:6px 11px" onclick="quickExample('8.75 coffee at starbucks')">8.75 coffee</div>
+      <div class="fc" style="font-size:11px;padding:6px 11px" onclick="quickExample('received 2400 salary')">received 2400 salary</div>
+      <div class="fc" style="font-size:11px;padding:6px 11px" onclick="quickExample('1.2k rent')">1.2k rent</div>
+    </div>
+    <div style="position:relative">
+      <textarea class="finput" id="quick-input" rows="4" placeholder="86 groceries woolworths&#10;12.50 lunch yesterday&#10;+150 refund" style="resize:none;line-height:1.7;font-size:15px;background:var(--bg-3);border-radius:var(--r-md);padding-right:52px" oninput="quickParsePreview()"></textarea>
+      <button id="voice-btn" onclick="toggleVoiceAdd()" title="Speak it instead" aria-label="Voice input" style="position:absolute;right:10px;bottom:12px;width:38px;height:38px;border-radius:50%;border:1px solid var(--line-2);background:var(--bg-4);color:var(--text-2);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s,color .15s,transform .12s">
+        <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+      </button>
+    </div>
+    <div id="quick-preview" style="margin:12px 0 4px"></div>
+    <button class="btn-primary" id="quick-save-btn" onclick="quickAddCommit()" disabled style="margin-top:8px">Add</button>
+    <div style="text-align:center;margin-top:12px"><a onclick="openFullForm()" style="font-size:12px;color:var(--text-3);cursor:pointer;text-decoration:underline;text-underline-offset:3px">Use the full form instead</a></div>
+  </div>
+</div>
+
+<div class="overlay" id="changelog-overlay" onclick="closeBg(event,'changelog-overlay')">
+  <div class="sheet">
+    <div class="handle"></div>
+    <div class="modal-title">What's new</div>
+    <div id="changelog-body" style="max-height:56vh;overflow-y:auto;padding:4px 2px"></div>
+  </div>
+</div>
+
+<div class="overlay" id="help-overlay" onclick="closeBg(event,'help-overlay')">
+  <div class="sheet">
+    <div class="handle"></div>
+    <div class="modal-title">Help &amp; guide</div>
+    <div id="help-body" style="max-height:56vh;overflow-y:auto;padding:4px 2px"></div>
+  </div>
+</div>
+
+<div class="overlay" id="period-overlay" onclick="closeBg(event,'period-overlay')">
+  <div class="sheet">
+    <div class="handle"></div>
+    <div class="modal-title">Pick a period</div>
+    <div class="settings-group" style="margin-bottom:16px">
+      <div class="srow" onclick="setCustomPeriod({type:'lastweek'})">
+        <div class="srow-ico"><span class="i-e">&#9194;</span><span class="i-l"><svg class="ic-line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span></div>
+        <div class="srow-body"><div class="srow-title">Last week</div><div class="srow-sub">The previous full Mon–Sun week</div></div>
+        <div class="srow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div>
+      </div>
+      <div class="srow" onclick="setCustomPeriod({type:'lastmonth'})">
+        <div class="srow-ico"><span class="i-e">&#128197;</span><span class="i-l"><svg class="ic-line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span></div>
+        <div class="srow-body"><div class="srow-title">Last month</div><div class="srow-sub">The previous calendar month</div></div>
+        <div class="srow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div>
+      </div>
+      <div class="srow" onclick="setCustomPeriod({type:'year',y:new Date().getFullYear()-1})">
+        <div class="srow-ico"><span class="i-e">&#128302;</span><span class="i-l"><svg class="ic-line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span></div>
+        <div class="srow-body"><div class="srow-title">Last year</div><div class="srow-sub" id="pp-lastyear-sub">Everything from last year</div></div>
+        <div class="srow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div>
+      </div>
+    </div>
+    <div class="flbl" style="margin-bottom:8px">Or a specific month or year</div>
+    <div id="pp-years" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"></div>
+    <div id="pp-months" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:16px"></div>
+    <div class="flbl" style="margin-bottom:8px">Or a specific day</div>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px">
+      <input class="finput" type="date" id="pp-day" style="flex:1;min-width:0" aria-label="Specific day">
+      <button class="btn-ghost" onclick="applyCustomDay()" style="width:auto;margin:0;padding:12px 18px;flex-shrink:0">Show day</button>
+    </div>
+    <div class="flbl" style="margin-bottom:8px">Or a custom date range</div>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+      <input class="finput" type="date" id="pp-from" style="flex:1;min-width:0" aria-label="From date">
+      <span style="color:var(--text-3);flex-shrink:0">&rarr;</span>
+      <input class="finput" type="date" id="pp-to" style="flex:1;min-width:0" aria-label="To date">
+    </div>
+    <button class="btn-primary" onclick="applyCustomRange()" style="margin-bottom:8px">Apply range</button>
+    <button class="btn-ghost" onclick="closeOverlay('period-overlay')">Cancel</button>
+  </div>
+</div>
+
+<!-- Add / Edit Transaction -->
+<div class="overlay" id="add-overlay" onclick="closeBg(event,'add-overlay')">
+  <div class="sheet">
+    <div class="handle"></div>
+    <div class="modal-title" style="display:flex;align-items:center;justify-content:center;gap:10px"><span id="add-modal-title">New transaction</span> <span onclick="openQuickAdd()" title="Scribe: type it in one line" style="cursor:pointer;font-size:11px;font-weight:700;color:var(--accent);background:var(--accent-soft);border-radius:999px;padding:5px 11px">&#10002; Scribe</span></div>
+    <!-- Quick-add chips: tap a recent entry to prefill (new transactions only) -->
+    <div id="quick-add-chips" style="display:none;gap:8px;flex-wrap:wrap;margin:2px 0 12px"></div>
+    <div class="type-row">
+      <div class="ttp" id="ttp"></div>
+      <div class="tb active" id="tb-exp" onclick="setType('expense')">Expense</div>
+      <div class="tb" id="tb-inc" onclick="setType('income')">Income</div>
+    </div>
+    <div class="amt-wrap">
+      <span class="amt-currency" id="add-symbol">$</span>
+      <input class="amt-input" type="text" id="add-amt" placeholder="0.00" inputmode="decimal" pattern="[0-9]*\.?[0-9]*" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+    </div>
+    <div class="fg"><div class="flbl">Description</div><input class="finput" type="text" id="add-desc" placeholder="What was this for?" onblur="autoCatFromDesc()"></div>
+    <div class="fg"><div class="flbl">Category</div><div class="cat-grid" id="cat-grid"></div></div>
+    <div class="fg" id="add-subcat-row" style="display:none"><div class="flbl">Add detail <span style="color:var(--text-3);font-weight:500">· optional</span></div><div id="subcat-chips" style="display:flex;flex-wrap:wrap;gap:8px"></div></div>
+    <div class="fg"><div class="flbl">Account Paid From</div>
+      <select class="finput" id="add-acct"><option value="">Select account</option></select>
+    </div>
+    <div class="fg"><div class="flbl">Date</div><input class="finput" type="date" id="add-date"></div>
+    <div class="fg"><div class="flbl">Notes</div><input class="finput" type="text" id="add-notes" placeholder="Optional notes"></div>
+    <div class="fg" id="add-member-row" style="display:none"><div class="flbl">Spent by</div><select class="finput" id="add-member-select"></select></div>
+    <button class="btn-primary" style="margin-top:8px" onclick="submitTx()">Save transaction</button>
+    <button class="btn-ghost" style="margin-top:8px" onclick="cancelAddTx()">Cancel</button>
+    <button class="btn-ghost" id="star-tx-btn" type="button" style="display:none;margin-top:8px;color:var(--text-2)" onclick="toggleStarCurrent()">☆ Star for quick add</button>
+    <button class="btn-ghost" id="del-tx-btn" style="display:none;color:var(--red);margin-top:8px" onclick="deleteTxFromModal()">Delete transaction</button>
+  </div>
+</div>
+
+<!-- Add / Edit Account -->
+<div class="overlay" id="acct-overlay" onclick="closeBg(event,'acct-overlay')">
+  <div class="sheet">
+    <div class="handle"></div>
+    <div class="modal-title" id="acct-modal-title">Add account</div>
+    <div class="fg"><div class="flbl">Name</div><input class="finput" type="text" id="acct-name" placeholder="e.g. Checking Account"></div>
+    <div class="fg"><div class="flbl">Type</div>
+      <select class="finput" id="acct-type">
+        <option value="Checking">Everyday / Checking</option>
+        <option value="Savings">Savings</option>
+        <option value="Credit">Credit card</option>
+        <option value="Cash">Cash</option>
+        <option value="Investment">Investment</option>
+        <option value="Crypto">Crypto</option>
+        <option value="Other">Other</option>
+      </select>
+    </div>
+    <div class="fg"><div class="flbl">Current balance</div><input class="finput" type="text" id="acct-bal" placeholder="0.00" inputmode="decimal" pattern="[0-9]*\.?[0-9]*" autocomplete="off"></div>
+    <button class="btn-primary" onclick="submitAcct()">Save Account</button>
+    <button class="btn-ghost" id="del-acct-btn" style="display:none;color:var(--red)" onclick="deleteAcctFromModal()">Delete account</button>
+  </div>
+</div>
+
+<!-- Add / Edit Recurring -->
+<div class="overlay" id="password-overlay" onclick="closeBg(event,'password-overlay')">
+  <div class="sheet">
+    <div class="handle"></div>
+    <div class="modal-title">Password lock</div>
+    <div class="setup-sub" style="margin:-4px 0 16px">Optional. Add a password so only people who know it can open this shared ledger. Leave it off if you don't need it · most people won't.</div>
+    <input class="finput" id="password-input" type="password" autocomplete="new-password" placeholder="Enter a password" style="margin-bottom:12px">
+    <button class="btn-primary" onclick="savePassword()">Save password</button>
+    <button class="btn-ghost" id="password-remove-btn" onclick="removePassword()" style="display:none;color:var(--red);margin-top:8px">Remove password</button>
+  </div>
+</div>
+<div class="overlay" id="subcat-overlay" onclick="closeBg(event,'subcat-overlay')">
+  <div class="sheet">
+    <div class="handle"></div>
+    <div class="modal-title">Subcategories</div>
+    <div class="setup-sub" style="margin:-4px 0 16px">Add detail under any category. They only appear in the add screen when you pick that category · everything else stays simple.</div>
+    <div class="flbl" style="margin-bottom:8px">Category</div>
+    <div id="subcat-cat-chips" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px"></div>
+    <div class="flbl" style="margin-bottom:8px">In <span id="subcat-current" style="color:var(--accent)">—</span></div>
+    <div id="subcat-list" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px"></div>
+    <div style="display:flex;gap:8px;align-items:stretch"><input class="finput" id="subcat-new" type="text" placeholder="Add a subcategory" autocomplete="off" style="flex:1;margin:0" onkeydown="event.key==='Enter'&&addSubcat()"><button class="btn-primary" style="width:auto;padding:0 24px;margin:0;min-height:0" onclick="addSubcat()">Add</button></div>
+  </div>
+</div>
+
+<div class="overlay" id="recurring-overlay" onclick="closeBg(event,'recurring-overlay')">
+  <div class="sheet">
+    <div class="handle"></div>
+    <div class="modal-title" id="recurring-modal-title">Add recurring</div>
+    <div class="type-row">
+      <div class="ttp" id="rttp"></div>
+      <div class="tb active" id="rtb-exp" onclick="setRecType('expense')">Expense</div>
+      <div class="tb" id="rtb-inc" onclick="setRecType('income')">Income</div>
+    </div>
+    <div class="fg"><div class="flbl">Name</div><input class="finput" type="text" id="rec-name" placeholder="e.g. Rent, Salary, Netflix"></div>
+    <div class="fg"><div class="flbl">Amount</div><input class="finput" type="text" id="rec-amt" placeholder="0.00" inputmode="decimal" pattern="[0-9]*\.?[0-9]*" autocomplete="off" autocorrect="off" autocapitalize="off"></div>
+    <div class="fg"><div class="flbl">Category</div><div class="cat-grid" id="rec-cat-grid"></div></div>
+    <div class="fg"><div class="flbl">Account</div>
+      <select class="finput" id="rec-acct"><option value="">Select account</option></select>
+    </div>
+    <div class="fg"><div class="flbl">Frequency</div>
+      <select class="finput" id="rec-freq">
+        <option value="daily">Daily</option>
+        <option value="weekly">Weekly</option>
+        <option value="monthly" selected>Monthly</option>
+        <option value="yearly">Yearly</option>
+      </select>
+    </div>
+    <div class="fg"><div class="flbl">Next due date</div><input class="finput" type="date" id="rec-next"></div>
+    <button class="btn-primary" onclick="submitRecurring()">Save</button>
+    <button class="btn-ghost" id="del-rec-btn" style="display:none;color:var(--red)" onclick="deleteRecFromModal()">Delete recurring</button>
+  </div>
+</div>
+
+<!-- Add / Edit Budget -->
+<div class="overlay" id="budget-overlay" onclick="closeBg(event,'budget-overlay')">
+  <div class="sheet">
+    <div class="handle"></div>
+    <div class="modal-title" id="budget-modal-title">Add budget</div>
+    <div class="fg"><div class="flbl">Category</div>
+      <select class="finput" id="budget-cat"></select>
+    </div>
+    <div class="fg"><div class="flbl">Monthly limit</div><input class="finput" type="number" id="budget-limit" placeholder="0.00" inputmode="decimal"></div>
+    <button class="btn-primary" onclick="submitBudget()">Save Budget</button>
+    <button class="btn-ghost" id="del-budget-btn" style="display:none;color:var(--red)" onclick="deleteBudgetFromModal()">Delete budget</button>
+  </div>
+</div>
+
+<!-- Add family member (from Settings) -->
+<div class="overlay" id="member-overlay" onclick="closeBg(event,'member-overlay')">
+  <div class="sheet">
+    <div class="handle"></div>
+    <div class="modal-title">Add family member</div>
+    <div class="fg"><div class="flbl">Name</div><input class="finput" type="text" id="member-name" placeholder="Their name" oninput="memberPinKey('check')"></div>
+    <div class="flbl" style="text-align:center;margin-bottom:8px">4-digit PIN</div>
+    <div class="pin-dots" id="member-pin-dots">
+      <div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div>
+    </div>
+    <input class="finput" type="password" inputmode="numeric" autocomplete="off" maxlength="4" id="member-pin-kb" oninput="pinKbInput('member',this)" placeholder="Or type it" style="text-align:center;margin:0 auto 16px;max-width:200px;display:block">
+    <div class="pin-pad" style="margin:0 auto 16px">
+      <div class="pin-key" onclick="memberPinKey('1')">1</div><div class="pin-key" onclick="memberPinKey('2')">2</div><div class="pin-key" onclick="memberPinKey('3')">3</div>
+      <div class="pin-key" onclick="memberPinKey('4')">4</div><div class="pin-key" onclick="memberPinKey('5')">5</div><div class="pin-key" onclick="memberPinKey('6')">6</div>
+      <div class="pin-key" onclick="memberPinKey('7')">7</div><div class="pin-key" onclick="memberPinKey('8')">8</div><div class="pin-key" onclick="memberPinKey('9')">9</div>
+      <div class="pin-key fn" onclick="memberPinKey('clear')">Clear</div><div class="pin-key" onclick="memberPinKey('0')">0</div><div class="pin-key fn" onclick="memberPinKey('back')">⌫</div>
+    </div>
+    <button class="btn-primary" id="member-save-btn" onclick="submitMember()" disabled>Add Member</button>
+  </div>
+</div>
+
+<!-- Recurring due review -->
+<div class="overlay" id="due-overlay" onclick="closeBg(event,'due-overlay')">
+  <div class="sheet">
+    <div class="handle"></div>
+    <div class="modal-title">Bills due</div>
+    <div style="font-size:12px;color:var(--text-3);text-align:center;margin:-2px 0 12px">These recurring bills have reached their date. Log the ones that were paid; skip anything that wasn't.</div>
+    <div id="due-list"></div>
+    <button class="btn-ghost" onclick="closeOverlay('due-overlay')">Not now · ask me next time</button>
+  </div>
+</div>
+
+<!-- Currency picker -->
+<div class="overlay" id="csv-options-overlay" onclick="closeBg(event,'csv-options-overlay')">
+  <div class="sheet">
+    <div class="handle"></div>
+    <div class="modal-title">Spreadsheet (CSV)</div>
+    <div class="setup-sub" style="margin:-4px 0 12px">A CSV is a plain transaction list you can open in Excel or Google Sheets · handy for taxes or accountants. (To back up the whole app instead, use Settings &rarr; App &rarr; “Back up everything”.)</div>
+    <div class="settings-group" style="margin-bottom:8px">
+      <div class="srow" onclick="closeOverlay('csv-options-overlay');openImportCSV()">
+        <div class="srow-ico"><span class="i-e">&#128229;</span><span class="i-l"><svg class="ic-line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M12 18v-6"/><path d="m9 15 3 3 3-3"/></svg></span></div>
+        <div class="srow-body"><div class="srow-title">Import transactions</div><div class="srow-sub">CSV, OFX or QIF export from your bank</div></div>
+        <div class="srow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div>
+      </div>
+      <div class="srow" onclick="closeOverlay('csv-options-overlay');doExport()">
+        <div class="srow-ico"><span class="i-e">&#128228;</span><span class="i-l"><svg class="ic-line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M12 12v6"/><path d="m9 15 3-3 3 3"/></svg></span></div>
+        <div class="srow-body"><div class="srow-title">Export transactions (spreadsheet)</div><div class="srow-sub">Opens in Excel / Google Sheets</div></div>
+        <div class="srow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="backup-options-overlay" onclick="closeBg(event,'backup-options-overlay')">
+  <div class="sheet">
+    <div class="handle"></div>
+    <div class="modal-title">Backup &amp; restore</div>
+    <div class="setup-sub" style="margin:-4px 0 12px">A backup is a complete snapshot of Prizm · every transaction, account, budget, goal and setting · saved as one file. Restore brings it all back on any device.</div>
+    <div class="settings-group" style="margin-bottom:8px">
+      <div class="srow" onclick="closeOverlay('backup-options-overlay');exportBackup()">
+        <div class="srow-ico"><span class="i-e">&#128190;</span><span class="i-l"><svg class="ic-line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg></span></div>
+        <div class="srow-body"><div class="srow-title">Back up everything</div><div class="srow-sub">Download a full backup file</div></div>
+        <div class="srow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div>
+      </div>
+      <div class="srow" onclick="closeOverlay('backup-options-overlay');document.getElementById('restore-file-input').click()">
+        <div class="srow-ico"><span class="i-e">&#8635;</span><span class="i-l"><svg class="ic-line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></span></div>
+        <div class="srow-body"><div class="srow-title">Restore from backup</div><div class="srow-sub">Load a backup file to bring everything back</div></div>
+        <div class="srow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="currency-overlay" onclick="closeBg(event,'currency-overlay')">
+  <div class="sheet">
+    <div class="handle"></div>
+    <div class="modal-title">Currency</div>
+    <div id="currency-list" class="settings-group" style="margin-bottom:8px"></div>
+  </div>
+</div>
+
+<script src="./app.js" defer></script>
+</body>
+</html>
